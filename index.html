@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#060B04">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Energy">
+  <title>Energy Dashboard</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #060B04; }
+
+    #loader {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      background: #060B04;
+    }
+    .spinner {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 3px solid rgba(74,98,65,0.2); border-top-color: #4A6241;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #auth-screen {
+      position: fixed; inset: 0; z-index: 9998;
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      background: #060B04; color: #FFF9F0;
+      padding: 40px 24px; gap: 24px;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      overflow-y: auto;
+    }
+    .auth-icon  { font-size: 52px; line-height: 1; }
+    .auth-title { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
+    .auth-sub   { font-size: 14px; color: rgba(255,249,240,0.5); text-align: center; line-height: 1.6; max-width: 320px; }
+
+    #auth-form { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 360px; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.7px;
+      text-transform: uppercase; color: rgba(255,249,240,0.45);
+    }
+    .field input {
+      width: 100%; padding: 13px 14px;
+      background: #0D170B; border: 1px solid #263824; border-radius: 10px;
+      color: #FFF9F0; font-size: 14px; outline: none; -webkit-appearance: none;
+    }
+    .field input:focus { border-color: #4A6241; box-shadow: 0 0 0 3px rgba(74,98,65,0.2); }
+    .field input::placeholder { color: rgba(255,249,240,0.2); }
+    .http-warn  { font-size: 12px; color: #e09040; display: none; margin-top: 2px; }
+    #auth-error { min-height: 16px; font-size: 13px; color: #e07070; text-align: center; }
+    #auth-submit {
+      padding: 14px; background: #4A6241; color: #FFF9F0;
+      border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #auth-submit:active { opacity: 0.75; }
+    .auth-help { font-size: 12px; color: rgba(255,249,240,0.3); text-align: center; line-height: 1.8; }
+    .auth-help strong { color: rgba(255,249,240,0.5); font-weight: 600; }
+
+    #app { position: fixed; inset: 0; display: none; }
+    energy-dashboard-card { display: block; width: 100%; height: 100%; }
+
+    #offline-banner {
+      position: fixed; top: env(safe-area-inset-top, 0); left: 0; right: 0;
+      background: #6D3430; color: #FFF9F0; text-align: center;
+      padding: 7px 16px; font-size: 12px; letter-spacing: 0.3px;
+      font-family: system-ui, sans-serif; z-index: 99999; display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loader"><div class="spinner"></div></div>
+  <div id="offline-banner">⚡ Offline — visar cachad data</div>
+
+  <div id="auth-screen">
+    <div class="auth-icon">⚡</div>
+    <div class="auth-title">Energy Dashboard</div>
+    <p class="auth-sub">Anslut till din Home Assistant för att komma igång.</p>
+
+    <form id="auth-form" autocomplete="on" novalidate>
+      <div class="field">
+        <label>Home Assistant URL</label>
+        <input id="ha-url" type="url"
+               placeholder="https://xxxxx.ui.nabu.casa"
+               autocomplete="url" autocorrect="off" autocapitalize="none" spellcheck="false">
+        <span id="http-warn" class="http-warn">⚠️ HTTP blockeras från HTTPS — använd Nabu Casa eller lokal HTTPS.</span>
+      </div>
+      <div class="field">
+        <label>Long-lived access token</label>
+        <input id="ha-token" type="password"
+               placeholder="eyJ0eXAiOiJKV1Qi…"
+               autocomplete="current-password">
+      </div>
+      <div class="field">
+        <label>Tibber API-token <span style="font-weight:400;text-transform:none;font-size:10px">(valfritt)</span></label>
+        <input id="tibber-token" type="password"
+               placeholder="Tibber developer token" autocomplete="off">
+      </div>
+      <div id="auth-error"></div>
+      <button id="auth-submit" type="submit">Anslut</button>
+    </form>
+
+    <p class="auth-help">
+      Skapa token: <strong>HA → Profil → Säkerhet → Long-lived access tokens</strong>
+    </p>
+  </div>
+
+  <div id="app">
+    <energy-dashboard-card></energy-dashboard-card>
+  </div>
+
+  <script>
+    // Default entity IDs from README
+    const DEFAULT_CONFIG = {
+      power_entity:              'sensor.forty_two_watts_load_power',
+      solar_entity:              'sensor.forty_two_watts_pv_power',
+      grid_power_entity:         'sensor.forty_two_watts_grid_power',
+      battery_power_entity:      'sensor.forty_two_watts_batteri_battery_power',
+      battery_soc_entity:        'sensor.forty_two_watts_batteri_battery_soc',
+      grid_consumed_entity:      'sensor.tibber_pulse_kottestigen_1_ackumulerad_forbrukning',
+      grid_produced_entity:      'sensor.tibber_pulse_kottestigen_1_ackumulerad_produktion',
+      grid_current_hour_entity:  'sensor.tibber_pulse_kottestigen_1_beraknad_forbrukning_aktuell_timme',
+      grid_produced_hour_entity: 'sensor.tibber_pulse_kottestigen_1_ackumulerad_produktion_aktuell_timme',
+      daily_house_entity:        'sensor.tibber_pulse_kottestigen_1_ackumulerad_forbrukning',
+      solar_kwh_entity:          'sensor.tibber_pulse_kottestigen_1_ackumulerad_produktion',
+      spot_price_entity:         'sensor.kottestigen_1_elpris',
+      tibber_price_info_entity:  'sensor.tibber_price_info_2',
+      temp_uv_entity:            'sensor.golvvarme_vardagsrum_temperature',
+      temp_ov_entity:            'sensor.temperature_overvaning',
+      temp_gh_entity:            'sensor.varmepump_gasthus_current_temperature',
+      heat_pump_gasthus:         'climate.varmepump_gasthus',
+      ev_charger_power_entity:   'sensor.forty_two_watts_ev_charger_power',
+      ev_soc_entity:             'sensor.tesla_battery_level',
+      ev_charger_entity:         'binary_sensor.forty_two_watts_ev_charger_connected',
+      varmepump_power_entity:    'sensor.varmepump_electric_power_kw',
+      heat_pump_entity:          'sensor.forty_two_watts_batteri_battery_soc',
+    };
+
+    const $loader        = document.getElementById('loader');
+    const $authScreen    = document.getElementById('auth-screen');
+    const $app           = document.getElementById('app');
+    const $authError     = document.getElementById('auth-error');
+    const $offlineBanner = document.getElementById('offline-banner');
+    const $httpWarn      = document.getElementById('http-warn');
+    const card           = document.querySelector('energy-dashboard-card');
+    let haConn           = null;
+
+    const hideLoader = () => { $loader.style.display = 'none'; };
+
+    function showAuth(msg) {
+      $authScreen.style.display = 'flex';
+      $app.style.display        = 'none';
+      $authError.textContent    = msg ?? '';
+      hideLoader();
+    }
+
+    function showApp() {
+      $authScreen.style.display = 'none';
+      $app.style.display        = 'block';
+      hideLoader();
+    }
+
+    function buildConfig() {
+      const saved  = JSON.parse(localStorage.getItem('ha_config') ?? '{}');
+      const tibber = localStorage.getItem('tibber_token') ?? '';
+      return { ...DEFAULT_CONFIG, ...saved, ...(tibber ? { tibber_token: tibber } : {}) };
+    }
+
+    function startConnection(hassUrl, token) {
+      if (haConn) haConn.destroy();
+      haConn = new HAConnection();
+      haConn.onAuthError = () => {
+        localStorage.removeItem('ha_url');
+        localStorage.removeItem('ha_token');
+        showAuth('Ogiltig token — kontrollera och försök igen.');
+      };
+      haConn.onOffline = () => { $offlineBanner.style.display = 'block'; };
+      haConn.onOnline  = () => { $offlineBanner.style.display = 'none'; };
+      card.setConfig(buildConfig());
+      haConn.setCard(card);
+      showApp();
+      haConn.connect(hassUrl, token);
+    }
+
+    document.getElementById('ha-url').addEventListener('input', function () {
+      $httpWarn.style.display = this.value.trim().startsWith('http://') ? 'block' : 'none';
+    });
+
+    document.getElementById('auth-form').addEventListener('submit', e => {
+      e.preventDefault();
+      $authError.textContent = '';
+      const hassUrl = document.getElementById('ha-url').value.trim().replace(/\/$/, '');
+      const token   = document.getElementById('ha-token').value.trim();
+      const tibber  = document.getElementById('tibber-token').value.trim();
+      if (!hassUrl || !token) { $authError.textContent = 'Fyll i URL och token.'; return; }
+      localStorage.setItem('ha_url',   hassUrl);
+      localStorage.setItem('ha_token', token);
+      if (tibber) localStorage.setItem('tibber_token', tibber);
+      startConnection(hassUrl, token);
+    });
+
+    // Load the card JS via fetch+blob to bypass GitHub Pages MIME mismatch for .html extension
+    function loadScript(url, blobWorkaround) {
+      return new Promise((resolve, reject) => {
+        if (!blobWorkaround) {
+          const s = Object.assign(document.createElement('script'), { src: url });
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+          return;
+        }
+        fetch(url)
+          .then(r => r.text())
+          .then(code => {
+            const burl = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+            const s    = Object.assign(document.createElement('script'), { src: burl });
+            s.onload = () => { URL.revokeObjectURL(burl); resolve(); };
+            s.onerror = () => { URL.revokeObjectURL(burl); reject(new Error('load failed')); };
+            document.head.appendChild(s);
+          })
+          .catch(reject);
+      });
+    }
+
+    (async () => {
+      try {
+        await loadScript('energy-dashboard-card.js.html', true);
+        await loadScript('ha-connection.js', false);
+      } catch {
+        showAuth('Kunde inte ladda appen — kontrollera nätverksanslutningen.');
+        return;
+      }
+      const hassUrl = localStorage.getItem('ha_url');
+      const token   = localStorage.getItem('ha_token');
+      if (!hassUrl || !token) { showAuth(); return; }
+      startConnection(hassUrl, token);
+    })();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
