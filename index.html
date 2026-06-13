@@ -2,7 +2,6 @@
 <html lang="sv">
 <head>
   <meta charset="UTF-8">
-  <!-- user-scalable=no: hindrar iOS auto-zoom vid input-fokus i PWA-läge -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#060B04">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,7 +14,6 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     html {
-      /* Exponera safe-area-insets som custom properties så kortets shadow DOM kan ärva dem */
       --sat: env(safe-area-inset-top,    0px);
       --sar: env(safe-area-inset-right,  0px);
       --sab: env(safe-area-inset-bottom, 0px);
@@ -27,12 +25,9 @@
       width: 100%; height: 100%;
       overflow: hidden;
       background: #060B04;
-      /* Förhindra studs-scroll på iOS */
       overscroll-behavior: none;
-      -webkit-overflow-scrolling: auto;
     }
 
-    /* ── Loader ─────────────────────────────────────────── */
     #loader {
       position: fixed; inset: 0; z-index: 9999;
       display: flex; align-items: center; justify-content: center;
@@ -45,34 +40,24 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Auth-skärm ─────────────────────────────────────── */
     #auth-screen {
       position: fixed; inset: 0; z-index: 9998;
       display: none; flex-direction: column; align-items: center; justify-content: center;
       background: #060B04; color: #FFF9F0;
       overflow-y: auto; -webkit-overflow-scrolling: touch;
-      /* Padding respekterar safe areas */
       padding: calc(var(--sat) + 32px) 24px calc(var(--sab) + 32px);
       gap: 20px;
       font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     }
     .auth-icon  { font-size: clamp(36px, 10vw, 52px); line-height: 1; }
     .auth-title { font-size: clamp(18px, 5vw, 22px); font-weight: 700; letter-spacing: -0.4px; }
-    .auth-sub {
-      font-size: clamp(12px, 3.5vw, 14px); color: rgba(255,249,240,0.5);
-      text-align: center; line-height: 1.6; max-width: 320px;
-    }
+    .auth-sub   { font-size: clamp(12px, 3.5vw, 14px); color: rgba(255,249,240,0.5); text-align: center; line-height: 1.6; max-width: 320px; }
 
     #auth-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 360px; }
     .field { display: flex; flex-direction: column; gap: 5px; }
-    .field label {
-      font-size: 11px; font-weight: 700; letter-spacing: 0.7px;
-      text-transform: uppercase; color: rgba(255,249,240,0.45);
-    }
+    .field label { font-size: 11px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: rgba(255,249,240,0.45); }
     .field input {
-      width: 100%;
-      /* min 44px touch target, skalas med viewport */
-      padding: clamp(10px, 3vw, 13px) 14px;
+      width: 100%; padding: clamp(10px, 3vw, 13px) 14px;
       background: #0D170B; border: 1px solid #263824; border-radius: 10px;
       color: #FFF9F0; font-size: 16px; /* 16px hindrar iOS-zoom vid fokus */
       outline: none; -webkit-appearance: none; appearance: none;
@@ -82,9 +67,7 @@
     .http-warn  { font-size: 12px; color: #e09040; display: none; margin-top: 2px; }
     #auth-error { min-height: 16px; font-size: 13px; color: #e07070; text-align: center; }
     #auth-submit {
-      /* Min 44px touch target */
-      min-height: 48px;
-      padding: 0 14px;
+      min-height: 48px; padding: 0 14px;
       background: #4A6241; color: #FFF9F0;
       border: none; border-radius: 10px;
       font-size: 15px; font-weight: 600; cursor: pointer;
@@ -94,33 +77,30 @@
     .auth-help { font-size: 12px; color: rgba(255,249,240,0.3); text-align: center; line-height: 1.8; }
     .auth-help strong { color: rgba(255,249,240,0.5); font-weight: 600; }
 
-    /* Kompakt layout på låga skärmar (t.ex. iPhone SE landscape) */
     @media (max-height: 560px) {
       #auth-screen { gap: 12px; justify-content: flex-start; padding-top: calc(var(--sat) + 16px); }
       .auth-sub { display: none; }
     }
 
-    /* ── App-behållare ──────────────────────────────────── */
     #app {
       position: fixed;
-      /* inset 0: täcker hela viewporten inklusive safe areas */
-      top:    0;
-      left:   0;
-      right:  0;
-      bottom: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
       display: none;
       overflow: hidden;
-    }
-    energy-dashboard-card {
-      display: block;
-      width:  100%;
-      height: 100%;
-      /* Fallback för äldre Safari som inte stödjer dvh */
-      height: 100vh;
-      height: 100dvh;
+      /* Bakgrundsfärg täcker safe-area-zoner om kortet inte gör det */
+      background: #060B04;
     }
 
-    /* ── Offline-banner ─────────────────────────────────── */
+    energy-dashboard-card {
+      display: block;
+      width: 100%;
+      /* 100svh = hela skärmhöjden inkl. safe areas på iOS standalone.
+         Kortet internt har height:100dvh (exkluderar ibland safe-area-bottom),
+         vilket skapar ett glapp under navigationen. 100svh fixar detta. */
+      height: 100vh;   /* fallback */
+      height: 100svh;  /* iOS standalone: full physical height */
+    }
+
     #offline-banner {
       position: fixed;
       top: var(--sat); left: 0; right: 0;
@@ -145,8 +125,8 @@
         <label>Home Assistant URL</label>
         <input id="ha-url" type="url"
                placeholder="https://xxxxx.ui.nabu.casa"
-               autocomplete="url" autocorrect="off" autocapitalize="none" spellcheck="false"
-               inputmode="url">
+               autocomplete="url" autocorrect="off" autocapitalize="none"
+               spellcheck="false" inputmode="url">
         <span id="http-warn" class="http-warn">⚠️ HTTP blockeras från HTTPS — använd Nabu Casa eller lokal HTTPS.</span>
       </div>
       <div class="field">
@@ -174,7 +154,6 @@
   </div>
 
   <script>
-    // Default entity IDs
     const DEFAULT_CONFIG = {
       power_entity:              'sensor.forty_two_watts_load_power',
       solar_entity:              'sensor.forty_two_watts_pv_power',
@@ -230,6 +209,21 @@
       return { ...DEFAULT_CONFIG, ...saved, ...(tibber ? { tibber_token: tibber } : {}) };
     }
 
+    // Injicerar safe-area-kompensation i kortets shadow DOM.
+    // Kortet saknar env(safe-area-inset-bottom) i sin nav-CSS —
+    // detta lägger till det utan att modifiera kortfilen.
+    function injectNavSafeArea() {
+      const root = card.shadowRoot;
+      if (!root || root.querySelector('[data-pwa-fix]')) return;
+      const s = document.createElement('style');
+      s.setAttribute('data-pwa-fix', '');
+      s.textContent =
+        '.nav, #main-nav {' +
+        '  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;' +
+        '}';
+      root.appendChild(s);
+    }
+
     function startConnection(hassUrl, token) {
       if (haConn) haConn.destroy();
       haConn = new HAConnection();
@@ -241,6 +235,7 @@
       haConn.onOffline = () => { $offlineBanner.style.display = 'block'; };
       haConn.onOnline  = () => { $offlineBanner.style.display = 'none'; };
       card.setConfig(buildConfig());
+      injectNavSafeArea();
       haConn.setCard(card);
       showApp();
       haConn.connect(hassUrl, token);
@@ -263,12 +258,10 @@
       startConnection(hassUrl, token);
     });
 
-    // Laddar .html-filen via fetch+eval: kringgår MIME-fel (GitHub Pages)
-    // och fungerar i iOS standalone/WKWebView (blob:-URLer blockeras där)
     function loadViaEval(url) {
       return fetch(url)
         .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-        .then(code => { (0, eval)(code); }); // indirect eval → globalt scope
+        .then(code => { (0, eval)(code); });
     }
 
     function loadScript(url) {
