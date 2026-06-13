@@ -1,4 +1,4 @@
-const CACHE = 'energy-pwa-v1';
+const CACHE = 'energy-pwa-v2'; // bumpa version = alla cacher rensas och nya filer hämtas
 const SHELL = [
   './',
   './index.html',
@@ -25,10 +25,10 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Only handle same-origin requests; cross-origin (HA API, Tibber) pass through untouched
+  // Släpp igenom cross-origin (HA API, Tibber) utan cachehantering
   if (new URL(e.request.url).origin !== location.origin) return;
 
-  // Cache-first with background revalidation
+  // Cache-first med bakgrundsuppdatering för same-origin-resurser
   e.respondWith(
     caches.match(e.request).then(cached => {
       const network = fetch(e.request).then(res => {
