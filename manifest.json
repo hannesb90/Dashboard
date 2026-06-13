@@ -1,0 +1,20 @@
+{
+  "name": "Energy Dashboard",
+  "short_name": "Energy",
+  "description": "Home energy monitoring and control",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#060B04",
+  "theme_color": "#060B04",
+  "orientation": "portrait-primary",
+  "categories": ["utilities"],
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
