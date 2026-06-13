@@ -1,9 +1,13 @@
-const CACHE = 'energy-pwa-v4';
-const SHELL = [
+const CACHE = 'energy-pwa-v5';
+
+// Only small files block install — large card file is cached lazily
+const MUST_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './ha-connection.js',
+];
+const LAZY_CACHE = [
   './energy-dashboard-card.js.html',
   './icons/icon.svg',
 ];
@@ -11,7 +15,13 @@ const SHELL = [
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
-      .then(c => c.addAll(SHELL))
+      .then(c => c.addAll(MUST_CACHE))
+      .then(() => {
+        // Cache large files in background — don't block install if they fail
+        caches.open(CACHE).then(c =>
+          c.addAll(LAZY_CACHE).catch(() => {})
+        );
+      })
       .then(() => self.skipWaiting())
   );
 });

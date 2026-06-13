@@ -80,11 +80,23 @@
       border-radius: 99px; font-family: system-ui, sans-serif;
       pointer-events: none; letter-spacing: 0.3px;
     }
+
+    #ver-badge {
+      position: fixed; bottom: calc(var(--sab) + 4px); left: 50%;
+      transform: translateX(-50%);
+      z-index: 999999;
+      background: rgba(74,98,65,0.9); color: #FFF9F0;
+      font-size: 11px; font-weight: 700; padding: 3px 10px;
+      border-radius: 99px; font-family: system-ui, sans-serif;
+      pointer-events: none; letter-spacing: 0.5px;
+      opacity: 1; transition: opacity 1s ease;
+    }
   </style>
 </head>
 <body>
   <div id="loader"><div class="spinner"></div></div>
   <div id="conn-status">Offline</div>
+  <div id="ver-badge">v5</div>
 
   <div id="auth-screen">
     <div class="auth-icon">&#9889;</div>
@@ -114,6 +126,12 @@
   <div id="app"><energy-dashboard-card></energy-dashboard-card></div>
 
   <script>
+    // Show version badge briefly then fade out
+    setTimeout(() => {
+      const b = document.getElementById('ver-badge');
+      if (b) { b.style.opacity = '0'; setTimeout(() => b.remove(), 1000); }
+    }, 3000);
+
     const DEFAULT_CONFIG = {
       power_entity:              'sensor.forty_two_watts_load_power',
       solar_entity:              'sensor.forty_two_watts_pv_power',
@@ -166,7 +184,6 @@
 
     function injectShadowFix() {
       const root = card.shadowRoot;
-      // Retry until shadow DOM is ready and nav element exists
       if (!root) { setTimeout(injectShadowFix, 100); return; }
       if (!root.querySelector('.nav')) { setTimeout(injectShadowFix, 50); return; }
       const old = root.querySelector('[data-pwa-fix]');
@@ -174,11 +191,11 @@
       const s = document.createElement('style');
       s.setAttribute('data-pwa-fix', '');
       s.textContent = [
-        // Push content below status bar / Dynamic Island
         '.shell { padding-top: env(safe-area-inset-top, 0px) !important; }',
-        // Use correct safe-area-inset-bottom so nav icons clear the home indicator.
-        // border-radius reduced from 20px to 12px (visually confirms injection is active).
-        '.nav, #main-nav { padding: 6px 8px env(safe-area-inset-bottom, 0px) !important; border-radius: 12px 12px 0 0 !important; }',
+        '.nav, #main-nav {',
+        '  padding: 6px 8px env(safe-area-inset-bottom, 0px) !important;',
+        '  border-radius: 0 !important;',
+        '}',
       ].join('\n');
       root.appendChild(s);
     }
