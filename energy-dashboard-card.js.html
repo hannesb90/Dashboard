@@ -85,7 +85,7 @@ const SHARED_CSS = `
     display: flex;
     justify-content: space-around;
     align-items: center;
-    padding: 2px 4px 2px;
+    padding: 4px 0 2px;
     border-top: 1px solid rgba(255,255,255,0.08);
     background: rgba(6,12,8,0.99);
     flex-shrink: 0;
@@ -94,12 +94,12 @@ const SHARED_CSS = `
   }
   .nav-item {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 2px; flex: 1; cursor: pointer; padding: 1px 4px;
+    gap: 1px; flex: 1; cursor: pointer; padding: 0;
     font-size: 9px; font-weight: 500;
-    color: rgba(226,215,196,0.4); border-radius: 8px; transition: color 0.15s;
+    color: rgba(226,215,196,0.4); transition: color 0.15s;
   }
   .nav-item.active { color: #E2D7C4; }
-  .nav-item svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; display: block; flex-shrink: 0; }
+  .nav-item svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; display: block; flex-shrink: 0; }
 
   /* ----- HERO ----- */
   .hero {
