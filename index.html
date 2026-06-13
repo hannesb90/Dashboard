@@ -206,33 +206,36 @@
       startConnection(hassUrl, token);
     });
 
-    // Load the card JS via fetch+blob to bypass GitHub Pages MIME mismatch for .html extension
-    function loadScript(url, blobWorkaround) {
+    // Load a script file by fetching its text and running it via indirect eval.
+    // This bypasses MIME-type restrictions (GitHub Pages serves .html as text/html)
+    // and works in iOS standalone PWA mode where blob: URLs are blocked in WKWebView.
+    function loadViaEval(url) {
+      return fetch(url)
+        .then(r => {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.text();
+        })
+        .then(code => {
+          // Indirect eval: runs in global scope, same effect as a <script> tag
+          (0, eval)(code);
+        });
+    }
+
+    function loadScript(url) {
       return new Promise((resolve, reject) => {
-        if (!blobWorkaround) {
-          const s = Object.assign(document.createElement('script'), { src: url });
-          s.onload = resolve; s.onerror = reject;
-          document.head.appendChild(s);
-          return;
-        }
-        fetch(url)
-          .then(r => r.text())
-          .then(code => {
-            const burl = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
-            const s    = Object.assign(document.createElement('script'), { src: burl });
-            s.onload = () => { URL.revokeObjectURL(burl); resolve(); };
-            s.onerror = () => { URL.revokeObjectURL(burl); reject(new Error('load failed')); };
-            document.head.appendChild(s);
-          })
-          .catch(reject);
+        const s = Object.assign(document.createElement('script'), { src: url });
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
       });
     }
 
     (async () => {
       try {
-        await loadScript('energy-dashboard-card.js.html', true);
-        await loadScript('ha-connection.js', false);
-      } catch {
+        // energy-dashboard-card.js.html is served as text/html by GitHub Pages,
+        // so a normal <script src> would be blocked. Use eval instead.
+        await loadViaEval('energy-dashboard-card.js.html');
+        await loadScript('ha-connection.js');
+      } catch (err) {
         showAuth('Kunde inte ladda appen — kontrollera nätverksanslutningen.');
         return;
       }
