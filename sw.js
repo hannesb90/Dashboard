@@ -1,4 +1,4 @@
-const CACHE = 'energy-pwa-v3';
+const CACHE = 'energy-pwa-v4';
 const SHELL = [
   './',
   './index.html',

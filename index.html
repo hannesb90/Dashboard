@@ -87,19 +87,19 @@
   <div id="conn-status">Offline</div>
 
   <div id="auth-screen">
-    <div class="auth-icon">⚡</div>
+    <div class="auth-icon">&#9889;</div>
     <div class="auth-title">Energy Dashboard</div>
-    <p class="auth-sub">Anslut till din Home Assistant för att komma igång.</p>
+    <p class="auth-sub">Anslut till din Home Assistant f&#246;r att komma ig&#229;ng.</p>
     <form id="auth-form" autocomplete="on" novalidate>
       <div class="field">
         <label>Home Assistant URL</label>
         <input id="ha-url" type="url" placeholder="https://xxxxx.ui.nabu.casa"
                autocomplete="url" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="url">
-        <span id="http-warn" class="http-warn">⚠️ HTTP blockeras från HTTPS — använd Nabu Casa eller lokal HTTPS.</span>
+        <span id="http-warn" class="http-warn">&#9888;&#65039; HTTP blockeras fr&#229;n HTTPS &#8212; anv&#228;nd Nabu Casa eller lokal HTTPS.</span>
       </div>
       <div class="field">
         <label>Long-lived access token</label>
-        <input id="ha-token" type="password" placeholder="eyJ0eXAiOiJKV1Qi…" autocomplete="current-password">
+        <input id="ha-token" type="password" placeholder="eyJ0eXAiOiJKV1Qi&#8230;" autocomplete="current-password">
       </div>
       <div class="field">
         <label>Tibber API-token <span style="font-weight:400;text-transform:none;font-size:10px">(valfritt)</span></label>
@@ -108,7 +108,7 @@
       <div id="auth-error"></div>
       <button id="auth-submit" type="submit">Anslut</button>
     </form>
-    <p class="auth-help">Skapa token: <strong>HA → Profil → Säkerhet → Long-lived access tokens</strong></p>
+    <p class="auth-help">Skapa token: <strong>HA &#8594; Profil &#8594; S&#228;kerhet &#8594; Long-lived access tokens</strong></p>
   </div>
 
   <div id="app"><energy-dashboard-card></energy-dashboard-card></div>
@@ -166,16 +166,19 @@
 
     function injectShadowFix() {
       const root = card.shadowRoot;
-      if (!root) return;
+      // Retry until shadow DOM is ready and nav element exists
+      if (!root) { setTimeout(injectShadowFix, 100); return; }
+      if (!root.querySelector('.nav')) { setTimeout(injectShadowFix, 50); return; }
       const old = root.querySelector('[data-pwa-fix]');
       if (old) old.remove();
       const s = document.createElement('style');
       s.setAttribute('data-pwa-fix', '');
       s.textContent = [
-        // Tryck ned innehåll under statusraden/Dynamic Island
+        // Push content below status bar / Dynamic Island
         '.shell { padding-top: env(safe-area-inset-top, 0px) !important; }',
-        // Minska nav-padding från 28px -> 16px så footern sitter lägre
-        '.nav, #main-nav { padding-bottom: 16px !important; }',
+        // Use correct safe-area-inset-bottom so nav icons clear the home indicator.
+        // border-radius reduced from 20px to 12px (visually confirms injection is active).
+        '.nav, #main-nav { padding: 6px 8px env(safe-area-inset-bottom, 0px) !important; border-radius: 12px 12px 0 0 !important; }',
       ].join('\n');
       root.appendChild(s);
     }
