@@ -12,7 +12,6 @@
   <link rel="apple-touch-icon" href="icons/icon.svg">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     html {
       --sat: env(safe-area-inset-top,    0px);
       --sar: env(safe-area-inset-right,  0px);
@@ -34,7 +33,6 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Auth ────────────────────────────────────────── */
     #auth-screen {
       position: fixed; inset: 0; z-index: 9998;
       display: none; flex-direction: column; align-items: center; justify-content: center;
@@ -71,35 +69,20 @@
       .auth-sub { display: none; }
     }
 
-    /* ── App ────────────────────────────────────────── */
     #app { position: fixed; inset: 0; display: none; overflow: hidden; background: #060B04; }
+    energy-dashboard-card { display: block; width: 100%; height: 100%; }
 
-    energy-dashboard-card {
-      display: block;
-      width: 100%;
-      /* 100% fyller #app (position:fixed; inset:0) = exakt full fysisk skärm.
-         Överskriver kortets interna :host{height:100dvh} som kan vara kortare
-         än fysisk skärm på iOS när safe-area räknas bort från dvh. */
-      height: 100%;
-    }
-
-    /* ── Anslutningsstatus ────────────────────────────── */
     #conn-status {
-      position: fixed;
-      top: calc(var(--sat) + 6px);
-      right: calc(var(--sar) + 10px);
+      position: fixed; top: calc(var(--sat) + 6px); right: calc(var(--sar) + 10px);
       z-index: 99999; display: none;
-      background: rgba(109,52,48,0.92);
-      color: #FFF9F0; font-size: 11px; font-weight: 600;
-      padding: 4px 10px; border-radius: 99px;
-      font-family: system-ui, sans-serif;
-      pointer-events: none;
-      letter-spacing: 0.3px;
+      background: rgba(109,52,48,0.92); color: #FFF9F0;
+      font-size: 11px; font-weight: 600; padding: 4px 10px;
+      border-radius: 99px; font-family: system-ui, sans-serif;
+      pointer-events: none; letter-spacing: 0.3px;
     }
   </style>
 </head>
 <body>
-
   <div id="loader"><div class="spinner"></div></div>
   <div id="conn-status">Offline</div>
 
@@ -128,9 +111,7 @@
     <p class="auth-help">Skapa token: <strong>HA → Profil → Säkerhet → Long-lived access tokens</strong></p>
   </div>
 
-  <div id="app">
-    <energy-dashboard-card></energy-dashboard-card>
-  </div>
+  <div id="app"><energy-dashboard-card></energy-dashboard-card></div>
 
   <script>
     const DEFAULT_CONFIG = {
@@ -158,14 +139,14 @@
       heat_pump_entity:          'sensor.forty_two_watts_batteri_battery_soc',
     };
 
-    const $loader      = document.getElementById('loader');
-    const $authScreen  = document.getElementById('auth-screen');
-    const $app         = document.getElementById('app');
-    const $authError   = document.getElementById('auth-error');
-    const $httpWarn    = document.getElementById('http-warn');
-    const $connStatus  = document.getElementById('conn-status');
-    const card         = document.querySelector('energy-dashboard-card');
-    let haConn         = null;
+    const $loader     = document.getElementById('loader');
+    const $authScreen = document.getElementById('auth-screen');
+    const $app        = document.getElementById('app');
+    const $authError  = document.getElementById('auth-error');
+    const $httpWarn   = document.getElementById('http-warn');
+    const $connStatus = document.getElementById('conn-status');
+    const card        = document.querySelector('energy-dashboard-card');
+    let haConn        = null;
 
     const hideLoader = () => { $loader.style.display = 'none'; };
     function showAuth(msg) {
@@ -175,9 +156,7 @@
     function showApp() {
       $authScreen.style.display = 'none'; $app.style.display = 'block'; hideLoader();
     }
-    function setConnected(online) {
-      $connStatus.style.display = online ? 'none' : 'block';
-    }
+    function setConnected(ok) { $connStatus.style.display = ok ? 'none' : 'block'; }
 
     function buildConfig() {
       const saved  = JSON.parse(localStorage.getItem('ha_config') ?? '{}');
@@ -185,22 +164,19 @@
       return { ...DEFAULT_CONFIG, ...saved, ...(tibber ? { tibber_token: tibber } : {}) };
     }
 
-    // Injicerar safe-area-kompensation i kortets shadow DOM.
-    // Kortet har padding: 10px 8px 28px på .nav utan någon env().
-    // Vi ersätter padding-bottom med env(safe-area-inset-bottom, 28px):
-    //   iPhone med hemindikator (~34px): använder 34px – håller innehåll ovanför indikatorn
-    //   iPhone SE / äldre utan indikator (0px): använder 28px som förut
-    function injectNavSafeArea() {
+    function injectShadowFix() {
       const root = card.shadowRoot;
       if (!root) return;
-      const existing = root.querySelector('[data-pwa-fix]');
-      if (existing) existing.remove(); // ta bort ev. tidigare felaktig injektion
+      const old = root.querySelector('[data-pwa-fix]');
+      if (old) old.remove();
       const s = document.createElement('style');
       s.setAttribute('data-pwa-fix', '');
-      s.textContent =
-        '.nav, #main-nav {' +
-        '  padding-bottom: env(safe-area-inset-bottom, 28px) !important;' +
-        '}';
+      s.textContent = [
+        // Tryck ned innehåll under statusraden/Dynamic Island
+        '.shell { padding-top: env(safe-area-inset-top, 0px) !important; }',
+        // Minska nav-padding från 28px -> 16px så footern sitter lägre
+        '.nav, #main-nav { padding-bottom: 16px !important; }',
+      ].join('\n');
       root.appendChild(s);
     }
 
@@ -214,7 +190,7 @@
       haConn.onOffline = () => setConnected(false);
       haConn.onOnline  = () => setConnected(true);
       card.setConfig(buildConfig());
-      injectNavSafeArea();
+      injectShadowFix();
       haConn.setCard(card);
       showApp();
       haConn.connect(hassUrl, token);
