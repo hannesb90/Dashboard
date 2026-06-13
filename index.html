@@ -96,7 +96,7 @@
 <body>
   <div id="loader"><div class="spinner"></div></div>
   <div id="conn-status">Offline</div>
-  <div id="ver-badge">v5</div>
+  <div id="ver-badge">v6</div>
 
   <div id="auth-screen">
     <div class="auth-icon">&#9889;</div>
@@ -126,7 +126,6 @@
   <div id="app"><energy-dashboard-card></energy-dashboard-card></div>
 
   <script>
-    // Show version badge briefly then fade out
     setTimeout(() => {
       const b = document.getElementById('ver-badge');
       if (b) { b.style.opacity = '0'; setTimeout(() => b.remove(), 1000); }
@@ -192,10 +191,7 @@
       s.setAttribute('data-pwa-fix', '');
       s.textContent = [
         '.shell { padding-top: env(safe-area-inset-top, 0px) !important; }',
-        '.nav, #main-nav {',
-        '  padding: 6px 8px env(safe-area-inset-bottom, 0px) !important;',
-        '  border-radius: 0 !important;',
-        '}',
+        '.nav, #main-nav { padding: 6px 8px 0px !important; border-radius: 0 !important; }',
       ].join('\n');
       root.appendChild(s);
     }
