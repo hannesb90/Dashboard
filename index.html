@@ -18,15 +18,9 @@
       --sar: env(safe-area-inset-right,  0px);
       --sab: env(safe-area-inset-bottom, 0px);
       --sal: env(safe-area-inset-left,   0px);
-      height: 100%;
-      background: #060B04;
+      height: 100%; background: #060B04;
     }
-    body {
-      width: 100%; height: 100%;
-      overflow: hidden;
-      background: #060B04;
-      overscroll-behavior: none;
-    }
+    body { width: 100%; height: 100%; overflow: hidden; background: #060B04; overscroll-behavior: none; }
 
     #loader {
       position: fixed; inset: 0; z-index: 9999;
@@ -40,27 +34,25 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Auth ────────────────────────────────────────── */
     #auth-screen {
       position: fixed; inset: 0; z-index: 9998;
       display: none; flex-direction: column; align-items: center; justify-content: center;
       background: #060B04; color: #FFF9F0;
       overflow-y: auto; -webkit-overflow-scrolling: touch;
       padding: calc(var(--sat) + 32px) 24px calc(var(--sab) + 32px);
-      gap: 20px;
-      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      gap: 20px; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     }
     .auth-icon  { font-size: clamp(36px, 10vw, 52px); line-height: 1; }
     .auth-title { font-size: clamp(18px, 5vw, 22px); font-weight: 700; letter-spacing: -0.4px; }
     .auth-sub   { font-size: clamp(12px, 3.5vw, 14px); color: rgba(255,249,240,0.5); text-align: center; line-height: 1.6; max-width: 320px; }
-
-    #auth-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 360px; }
-    .field { display: flex; flex-direction: column; gap: 5px; }
+    #auth-form  { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 360px; }
+    .field      { display: flex; flex-direction: column; gap: 5px; }
     .field label { font-size: 11px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: rgba(255,249,240,0.45); }
     .field input {
-      width: 100%; padding: clamp(10px, 3vw, 13px) 14px;
+      width: 100%; padding: clamp(10px,3vw,13px) 14px;
       background: #0D170B; border: 1px solid #263824; border-radius: 10px;
-      color: #FFF9F0; font-size: 16px; /* 16px hindrar iOS-zoom vid fokus */
-      outline: none; -webkit-appearance: none; appearance: none;
+      color: #FFF9F0; font-size: 16px; outline: none; -webkit-appearance: none; appearance: none;
     }
     .field input:focus { border-color: #4A6241; box-shadow: 0 0 0 3px rgba(74,98,65,0.2); }
     .field input::placeholder { color: rgba(255,249,240,0.2); }
@@ -68,85 +60,72 @@
     #auth-error { min-height: 16px; font-size: 13px; color: #e07070; text-align: center; }
     #auth-submit {
       min-height: 48px; padding: 0 14px;
-      background: #4A6241; color: #FFF9F0;
-      border: none; border-radius: 10px;
-      font-size: 15px; font-weight: 600; cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
+      background: #4A6241; color: #FFF9F0; border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent;
     }
     #auth-submit:active { opacity: 0.75; }
     .auth-help { font-size: 12px; color: rgba(255,249,240,0.3); text-align: center; line-height: 1.8; }
     .auth-help strong { color: rgba(255,249,240,0.5); font-weight: 600; }
-
     @media (max-height: 560px) {
       #auth-screen { gap: 12px; justify-content: flex-start; padding-top: calc(var(--sat) + 16px); }
       .auth-sub { display: none; }
     }
 
-    #app {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      display: none;
-      overflow: hidden;
-      /* Bakgrundsfärg täcker safe-area-zoner om kortet inte gör det */
-      background: #060B04;
-    }
+    /* ── App ────────────────────────────────────────── */
+    #app { position: fixed; inset: 0; display: none; overflow: hidden; background: #060B04; }
 
     energy-dashboard-card {
       display: block;
       width: 100%;
-      /* 100svh = hela skärmhöjden inkl. safe areas på iOS standalone.
-         Kortet internt har height:100dvh (exkluderar ibland safe-area-bottom),
-         vilket skapar ett glapp under navigationen. 100svh fixar detta. */
-      height: 100vh;   /* fallback */
-      height: 100svh;  /* iOS standalone: full physical height */
+      /* 100% fyller #app (position:fixed; inset:0) = exakt full fysisk skärm.
+         Överskriver kortets interna :host{height:100dvh} som kan vara kortare
+         än fysisk skärm på iOS när safe-area räknas bort från dvh. */
+      height: 100%;
     }
 
-    #offline-banner {
+    /* ── Anslutningsstatus ────────────────────────────── */
+    #conn-status {
       position: fixed;
-      top: var(--sat); left: 0; right: 0;
-      background: #6D3430; color: #FFF9F0; text-align: center;
-      padding: 7px 16px; font-size: 12px; letter-spacing: 0.3px;
-      font-family: system-ui, sans-serif; z-index: 99999; display: none;
+      top: calc(var(--sat) + 6px);
+      right: calc(var(--sar) + 10px);
+      z-index: 99999; display: none;
+      background: rgba(109,52,48,0.92);
+      color: #FFF9F0; font-size: 11px; font-weight: 600;
+      padding: 4px 10px; border-radius: 99px;
+      font-family: system-ui, sans-serif;
+      pointer-events: none;
+      letter-spacing: 0.3px;
     }
   </style>
 </head>
 <body>
 
   <div id="loader"><div class="spinner"></div></div>
-  <div id="offline-banner">⚡ Offline — visar cachad data</div>
+  <div id="conn-status">Offline</div>
 
   <div id="auth-screen">
     <div class="auth-icon">⚡</div>
     <div class="auth-title">Energy Dashboard</div>
     <p class="auth-sub">Anslut till din Home Assistant för att komma igång.</p>
-
     <form id="auth-form" autocomplete="on" novalidate>
       <div class="field">
         <label>Home Assistant URL</label>
-        <input id="ha-url" type="url"
-               placeholder="https://xxxxx.ui.nabu.casa"
-               autocomplete="url" autocorrect="off" autocapitalize="none"
-               spellcheck="false" inputmode="url">
+        <input id="ha-url" type="url" placeholder="https://xxxxx.ui.nabu.casa"
+               autocomplete="url" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="url">
         <span id="http-warn" class="http-warn">⚠️ HTTP blockeras från HTTPS — använd Nabu Casa eller lokal HTTPS.</span>
       </div>
       <div class="field">
         <label>Long-lived access token</label>
-        <input id="ha-token" type="password"
-               placeholder="eyJ0eXAiOiJKV1Qi…"
-               autocomplete="current-password">
+        <input id="ha-token" type="password" placeholder="eyJ0eXAiOiJKV1Qi…" autocomplete="current-password">
       </div>
       <div class="field">
         <label>Tibber API-token <span style="font-weight:400;text-transform:none;font-size:10px">(valfritt)</span></label>
-        <input id="tibber-token" type="password"
-               placeholder="Tibber developer token" autocomplete="off">
+        <input id="tibber-token" type="password" placeholder="Tibber developer token" autocomplete="off">
       </div>
       <div id="auth-error"></div>
       <button id="auth-submit" type="submit">Anslut</button>
     </form>
-
-    <p class="auth-help">
-      Skapa token: <strong>HA → Profil → Säkerhet → Long-lived access tokens</strong>
-    </p>
+    <p class="auth-help">Skapa token: <strong>HA → Profil → Säkerhet → Long-lived access tokens</strong></p>
   </div>
 
   <div id="app">
@@ -179,28 +158,25 @@
       heat_pump_entity:          'sensor.forty_two_watts_batteri_battery_soc',
     };
 
-    const $loader        = document.getElementById('loader');
-    const $authScreen    = document.getElementById('auth-screen');
-    const $app           = document.getElementById('app');
-    const $authError     = document.getElementById('auth-error');
-    const $offlineBanner = document.getElementById('offline-banner');
-    const $httpWarn      = document.getElementById('http-warn');
-    const card           = document.querySelector('energy-dashboard-card');
-    let haConn           = null;
+    const $loader      = document.getElementById('loader');
+    const $authScreen  = document.getElementById('auth-screen');
+    const $app         = document.getElementById('app');
+    const $authError   = document.getElementById('auth-error');
+    const $httpWarn    = document.getElementById('http-warn');
+    const $connStatus  = document.getElementById('conn-status');
+    const card         = document.querySelector('energy-dashboard-card');
+    let haConn         = null;
 
     const hideLoader = () => { $loader.style.display = 'none'; };
-
     function showAuth(msg) {
-      $authScreen.style.display = 'flex';
-      $app.style.display        = 'none';
-      $authError.textContent    = msg ?? '';
-      hideLoader();
+      $authScreen.style.display = 'flex'; $app.style.display = 'none';
+      $authError.textContent = msg ?? ''; hideLoader();
     }
-
     function showApp() {
-      $authScreen.style.display = 'none';
-      $app.style.display        = 'block';
-      hideLoader();
+      $authScreen.style.display = 'none'; $app.style.display = 'block'; hideLoader();
+    }
+    function setConnected(online) {
+      $connStatus.style.display = online ? 'none' : 'block';
     }
 
     function buildConfig() {
@@ -210,16 +186,20 @@
     }
 
     // Injicerar safe-area-kompensation i kortets shadow DOM.
-    // Kortet saknar env(safe-area-inset-bottom) i sin nav-CSS —
-    // detta lägger till det utan att modifiera kortfilen.
+    // Kortet har padding: 10px 8px 28px på .nav utan någon env().
+    // Vi ersätter padding-bottom med env(safe-area-inset-bottom, 28px):
+    //   iPhone med hemindikator (~34px): använder 34px – håller innehåll ovanför indikatorn
+    //   iPhone SE / äldre utan indikator (0px): använder 28px som förut
     function injectNavSafeArea() {
       const root = card.shadowRoot;
-      if (!root || root.querySelector('[data-pwa-fix]')) return;
+      if (!root) return;
+      const existing = root.querySelector('[data-pwa-fix]');
+      if (existing) existing.remove(); // ta bort ev. tidigare felaktig injektion
       const s = document.createElement('style');
       s.setAttribute('data-pwa-fix', '');
       s.textContent =
         '.nav, #main-nav {' +
-        '  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;' +
+        '  padding-bottom: env(safe-area-inset-bottom, 28px) !important;' +
         '}';
       root.appendChild(s);
     }
@@ -228,12 +208,11 @@
       if (haConn) haConn.destroy();
       haConn = new HAConnection();
       haConn.onAuthError = () => {
-        localStorage.removeItem('ha_url');
-        localStorage.removeItem('ha_token');
+        localStorage.removeItem('ha_url'); localStorage.removeItem('ha_token');
         showAuth('Ogiltig token — kontrollera och försök igen.');
       };
-      haConn.onOffline = () => { $offlineBanner.style.display = 'block'; };
-      haConn.onOnline  = () => { $offlineBanner.style.display = 'none'; };
+      haConn.onOffline = () => setConnected(false);
+      haConn.onOnline  = () => setConnected(true);
       card.setConfig(buildConfig());
       injectNavSafeArea();
       haConn.setCard(card);
@@ -244,16 +223,13 @@
     document.getElementById('ha-url').addEventListener('input', function () {
       $httpWarn.style.display = this.value.trim().startsWith('http://') ? 'block' : 'none';
     });
-
     document.getElementById('auth-form').addEventListener('submit', e => {
-      e.preventDefault();
-      $authError.textContent = '';
+      e.preventDefault(); $authError.textContent = '';
       const hassUrl = document.getElementById('ha-url').value.trim().replace(/\/$/, '');
       const token   = document.getElementById('ha-token').value.trim();
       const tibber  = document.getElementById('tibber-token').value.trim();
       if (!hassUrl || !token) { $authError.textContent = 'Fyll i URL och token.'; return; }
-      localStorage.setItem('ha_url',   hassUrl);
-      localStorage.setItem('ha_token', token);
+      localStorage.setItem('ha_url', hassUrl); localStorage.setItem('ha_token', token);
       if (tibber) localStorage.setItem('tibber_token', tibber);
       startConnection(hassUrl, token);
     });
@@ -263,7 +239,6 @@
         .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
         .then(code => { (0, eval)(code); });
     }
-
     function loadScript(url) {
       return new Promise((resolve, reject) => {
         const s = Object.assign(document.createElement('script'), { src: url });
