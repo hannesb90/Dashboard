@@ -3,458 +3,271 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Energy Dashboard – Cast</title>
+  <title>Energy – Cast</title>
+  <!-- Must load before any Cast API calls -->
+  <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:      #060B04;
-      --bg2:     #0D170B;
-      --surface: rgba(255,249,240,0.04);
-      --border:  rgba(255,249,240,0.07);
-      --text:    #FFF9F0;
-      --muted:   rgba(255,249,240,0.4);
-      --muted2:  rgba(255,249,240,0.25);
-      --accent:  #4A6241;
-      --solar:   #FFD044;
-      --grid-in: #E07060;
-      --grid-out:#5DB87A;
-      --batt:    #60A8E0;
-      --price:   #FFB347;
-    }
-
-    body {
-      width: 100vw; height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-      display: flex; flex-direction: column;
-      overflow: hidden;
-    }
+    html, body { width: 100vw; height: 100vh; background: #060B04; overflow: hidden; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #FFF9F0; }
 
     /* ── Waiting screen ─────────────────────────────── */
     #waiting {
-      position: fixed; inset: 0; z-index: 99;
+      position: fixed; inset: 0; z-index: 999;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      background: var(--bg); gap: 14px;
+      gap: 14px; background: #060B04;
     }
-    #waiting svg { opacity: 0.3; }
-    #waiting-title { font-size: 18px; font-weight: 500; color: var(--muted); }
-    #waiting-sub   { font-size: 13px; color: var(--muted2); }
+    #waiting-title { font-size: 15px; color: rgba(255,249,240,0.45); }
+    #waiting-sub   { font-size: 12px; color: rgba(255,249,240,0.25); min-height: 36px; display: flex; align-items: center; justify-content: center; }
+    .spinner {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 2.5px solid rgba(74,98,65,0.2); border-top-color: #4A6241;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Header ─────────────────────────────────────── */
-    .header {
-      flex: 0 0 52px;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 28px;
-      border-bottom: 1px solid var(--border);
+    /* ── Sidebars (fixed, outside card) ────────────── */
+    .sidebar {
+      position: fixed; top: 0; height: 100vh;
+      width: calc((100vw - 390px) / 2);
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 6px;
+      background: #060B04;
     }
-    .header-left {
-      display: flex; align-items: center; gap: 10px;
+    #sidebar-left  { left: 0;  border-right: 1px solid rgba(255,249,240,0.07); }
+    #sidebar-right { right: 0; border-left:  1px solid rgba(255,249,240,0.07); }
+
+    /* Left: clock */
+    .sb-time {
+      font-size: clamp(38px, 4.8vw, 64px);
+      font-weight: 300; letter-spacing: -2px; line-height: 1;
     }
-    .header-title {
-      font-size: 13px; font-weight: 600;
-      color: var(--muted); letter-spacing: 0.6px;
-      text-transform: uppercase;
+    .sb-date {
+      font-size: 12px; color: rgba(255,249,240,0.35);
+      font-weight: 500; letter-spacing: 0.4px;
+      margin-bottom: 20px;
     }
-    .header-time {
-      font-size: 13px; font-weight: 500; color: var(--muted);
+    .conn-row {
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 4px;
     }
     .conn-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--accent); flex-shrink: 0;
-      transition: background 0.5s;
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #4A6241; transition: background 0.5s;
+      flex-shrink: 0;
     }
-    .conn-dot.offline { background: var(--grid-in); }
-
-    /* ── Main grid ───────────────────────────────────── */
-    .main {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
+    .conn-dot.offline { background: #E07060; }
+    .conn-lbl {
+      font-size: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.7px;
+      color: rgba(255,249,240,0.25);
     }
+    .cast-watermark { margin-top: 28px; opacity: 0.12; }
 
-    .tile {
+    /* Right: quick stats */
+    .stat {
       display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      padding: 16px 24px;
-      border-right: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-      gap: 6px;
+      align-items: center; gap: 3px;
+      padding: 12px 0;
     }
-    .tile:nth-child(3), .tile:nth-child(6) { border-right: none; }
-    .tile:nth-child(4), .tile:nth-child(5), .tile:nth-child(6) { border-bottom: none; }
+    .stat-lbl {
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: rgba(255,249,240,0.28);
+    }
+    .stat-val {
+      font-size: clamp(24px, 3vw, 38px);
+      font-weight: 300; letter-spacing: -0.5px; line-height: 1;
+    }
+    .stat-unit { font-size: 11px; color: rgba(255,249,240,0.3); }
+    .stat-div  { width: 28px; height: 1px; background: rgba(255,249,240,0.08); margin: 2px 0; }
 
-    .tile-icon {
-      width: 28px; height: 28px;
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0.5;
+    /* ── Card wrapper ───────────────────────────────── */
+    /*
+     * transform: translateX(-50%) serves two purposes:
+     *   1. Centers the 390 px card on the 1024 px display.
+     *   2. Creates a new CSS containing block so every
+     *      position:fixed element inside the card's Shadow DOM
+     *      is contained within the 390 px wrapper instead of
+     *      spanning the full Nest Hub viewport.
+     */
+    #card-wrap {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 390px;
+      height: 100vh;
+      overflow: hidden;
+      display: none;
     }
-    .tile-icon svg {
-      width: 22px; height: 22px;
-      fill: none; stroke: currentColor; stroke-width: 1.8;
-      stroke-linecap: round; stroke-linejoin: round;
-    }
-    .tile-label {
-      font-size: 11px; font-weight: 700;
-      letter-spacing: 0.8px; text-transform: uppercase;
-      color: var(--muted);
-    }
-    .tile-value {
-      font-size: clamp(32px, 4.5vw, 52px);
-      font-weight: 300;
-      letter-spacing: -1.5px;
-      line-height: 1;
-    }
-    .tile-unit {
-      font-size: 13px; color: var(--muted);
-    }
-    .tile-sub {
-      font-size: 12px; color: var(--muted2);
-      margin-top: 2px;
-    }
-
-    /* color accents */
-    .c-solar  { color: var(--solar); }
-    .c-gridin { color: var(--grid-in); }
-    .c-gridout{ color: var(--grid-out); }
-    .c-batt   { color: var(--batt); }
-    .c-price  { color: var(--price); }
-
-    /* ── Footer ──────────────────────────────────────── */
-    .footer {
-      flex: 0 0 48px;
-      display: flex; align-items: center; justify-content: space-around;
-      padding: 0 32px;
-      border-top: 1px solid var(--border);
-    }
-    .footer-item {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .footer-label {
-      font-size: 11px; color: var(--muted2);
-      text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    .footer-val {
-      font-size: 15px; font-weight: 500;
-    }
-    .footer-sep {
-      width: 1px; height: 20px;
-      background: var(--border);
-    }
-
-    /* Cast icon */
-    .cast-logo {
-      width: 18px; height: 18px; opacity: 0.3;
-    }
+    energy-dashboard-card { display: block; width: 100%; height: 100%; }
   </style>
 </head>
 <body>
 
-<!-- Waiting screen shown until INIT message received -->
+<!-- Waiting -->
 <div id="waiting">
-  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#FFF9F0" stroke-width="1.5" stroke-linecap="round">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+       stroke="rgba(255,249,240,0.35)" stroke-width="1.5" stroke-linecap="round">
     <path d="M2 16.1A5 5 0 0 1 5.9 20"/>
     <path d="M2 12.05A9 9 0 0 1 9.95 20"/>
     <path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/>
     <line x1="2" y1="20" x2="2.01" y2="20"/>
   </svg>
   <div id="waiting-title">Energy Dashboard</div>
-  <div id="waiting-sub">Öppna appen på din telefon och tryck på cast-ikonen.</div>
+  <div id="waiting-sub">Öppna appen och tryck på cast-ikonen</div>
 </div>
 
-<!-- Dashboard (hidden until connected) -->
-<div id="dashboard" style="display:none;height:100%;flex-direction:column">
-
-  <div class="header">
-    <div class="header-left">
-      <div class="conn-dot" id="conn-dot"></div>
-      <span class="header-title">Energy Dashboard</span>
-    </div>
-    <span class="header-time" id="header-time">--:--</span>
+<!-- Left sidebar: klocka + status -->
+<div class="sidebar" id="sidebar-left">
+  <div class="sb-time" id="sb-time">--:--</div>
+  <div class="sb-date" id="sb-date">--</div>
+  <div class="conn-row">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span class="conn-lbl" id="conn-lbl">Live</span>
   </div>
-
-  <div class="main">
-    <!-- Row 1 -->
-    <div class="tile">
-      <div class="tile-icon c-solar">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-      </div>
-      <div class="tile-label">Solar</div>
-      <div class="tile-value c-solar"><span id="v-solar">--</span></div>
-      <div class="tile-unit">kW</div>
-    </div>
-
-    <div class="tile">
-      <div class="tile-icon">
-        <svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
-      </div>
-      <div class="tile-label">Förbrukning</div>
-      <div class="tile-value"><span id="v-house">--</span></div>
-      <div class="tile-unit">kW</div>
-    </div>
-
-    <div class="tile">
-      <div class="tile-icon" id="grid-icon">
-        <svg viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
-      </div>
-      <div class="tile-label">Elnät</div>
-      <div class="tile-value"><span id="v-grid">--</span></div>
-      <div class="tile-unit">kW</div>
-      <div class="tile-sub" id="v-grid-dir">--</div>
-    </div>
-
-    <!-- Row 2 -->
-    <div class="tile">
-      <div class="tile-icon c-batt">
-        <svg viewBox="0 0 24 24"><rect x="1" y="6" width="18" height="12" rx="2"/><path d="M23 13v-2"/></svg>
-      </div>
-      <div class="tile-label">Batteri</div>
-      <div class="tile-value c-batt"><span id="v-batt-soc">--</span></div>
-      <div class="tile-unit">%</div>
-      <div class="tile-sub" id="v-batt-power">--</div>
-    </div>
-
-    <div class="tile">
-      <div class="tile-icon c-price">
-        <svg viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H15a3.5 3.5 0 0 1 0 7H6"/></svg>
-      </div>
-      <div class="tile-label">Spotpris</div>
-      <div class="tile-value c-price"><span id="v-price">--</span></div>
-      <div class="tile-unit">öre/kWh</div>
-    </div>
-
-    <div class="tile">
-      <div class="tile-icon">
-        <svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
-      </div>
-      <div class="tile-label">Temperatur</div>
-      <div class="tile-value" style="font-size:clamp(20px,3vw,34px)">
-        <span id="v-temp-uv">--</span>° <span style="color:var(--muted);font-size:0.6em">/</span> <span id="v-temp-ov">--</span>°
-      </div>
-      <div class="tile-unit">UV / ÖV</div>
-    </div>
-  </div>
-
-  <div class="footer">
-    <div class="footer-item">
-      <span class="footer-label">Tesla</span>
-      <span class="footer-val" id="f-ev">-- %</span>
-    </div>
-    <div class="footer-sep"></div>
-    <div class="footer-item">
-      <span class="footer-label">Laddare</span>
-      <span class="footer-val" id="f-charger">-- kW</span>
-    </div>
-    <div class="footer-sep"></div>
-    <div class="footer-item">
-      <span class="footer-label">Värmepump</span>
-      <span class="footer-val" id="f-hp">-- kW</span>
-    </div>
-    <div class="footer-sep"></div>
-    <div class="footer-item">
-      <span class="footer-label">Gästhus</span>
-      <span class="footer-val" id="f-gh">-- °C</span>
-    </div>
-    <div class="footer-sep"></div>
-    <div class="footer-item">
-      <svg class="cast-logo" viewBox="0 0 24 24" fill="none" stroke="#FFF9F0" stroke-width="1.5" stroke-linecap="round">
-        <path d="M2 16.1A5 5 0 0 1 5.9 20"/><path d="M2 12.05A9 9 0 0 1 9.95 20"/>
-        <path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/>
-        <line x1="2" y1="20" x2="2.01" y2="20"/>
-      </svg>
-      <span class="footer-label" style="color:rgba(255,249,240,0.2)">Nest Hub</span>
-    </div>
+  <div class="cast-watermark">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="#FFF9F0" stroke-width="1.5" stroke-linecap="round">
+      <path d="M2 16.1A5 5 0 0 1 5.9 20"/>
+      <path d="M2 12.05A9 9 0 0 1 9.95 20"/>
+      <path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/>
+      <line x1="2" y1="20" x2="2.01" y2="20"/>
+    </svg>
   </div>
 </div>
 
-<script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+<!-- Main card (portrait, centered) -->
+<div id="card-wrap">
+  <energy-dashboard-card></energy-dashboard-card>
+</div>
+
+<!-- Right sidebar: dagsstats -->
+<div class="sidebar" id="sidebar-right">
+  <div class="stat">
+    <div class="stat-lbl">Solar idag</div>
+    <div class="stat-val" id="sb-solar">--</div>
+    <div class="stat-unit">kWh</div>
+  </div>
+  <div class="stat-div"></div>
+  <div class="stat">
+    <div class="stat-lbl">Förbrukat</div>
+    <div class="stat-val" id="sb-grid">--</div>
+    <div class="stat-unit">kWh</div>
+  </div>
+  <div class="stat-div"></div>
+  <div class="stat">
+    <div class="stat-lbl">Tesla</div>
+    <div class="stat-val" id="sb-ev">--</div>
+    <div class="stat-unit">%</div>
+  </div>
+</div>
+
 <script>
 const CAST_NAMESPACE = 'urn:x-cast:energy-dashboard';
+const DAYS   = ['Sön','Mån','Tis','Ons','Tor','Fre','Lör'];
+const MONTHS = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
 
-// ── UI helpers ──────────────────────────────────────────────────
-const $  = (id) => document.getElementById(id);
-const el = (id) => $(id);
+// ── Clock ─────────────────────────────────────────────────────
+function tickClock() {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  document.getElementById('sb-time').textContent = `${hh}:${mm}`;
+  document.getElementById('sb-date').textContent =
+    `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+setInterval(tickClock, 10000);
+tickClock();
 
-function fmt(val, decimals = 1) {
-  const n = parseFloat(val);
-  return isNaN(n) ? '--' : n.toFixed(decimals);
+// ── Loaders ───────────────────────────────────────────────────
+function loadViaEval(url) {
+  return fetch(url).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.text();
+  }).then(code => (0, eval)(code));
+}
+function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    const s = Object.assign(document.createElement('script'), { src: url });
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
 }
 
-function updateClock() {
-  const now = new Date();
-  const h = String(now.getHours()).padStart(2, '0');
-  const m = String(now.getMinutes()).padStart(2, '0');
-  $('header-time').textContent = `${h}:${m}`;
-}
-setInterval(updateClock, 10000);
-updateClock();
+// ── Sidebar stats ─────────────────────────────────────────────
+let _cfg = {};
+function updateSidebar(hass) {
+  const st = hass.states;
+  const get = (id) => parseFloat(st[id]?.state ?? 'NaN');
 
-// ── Home Assistant WebSocket ────────────────────────────────────
-class HAReceiverConn {
-  constructor(hassUrl, token, onUpdate, onOnline, onOffline) {
-    this._hassUrl  = hassUrl;
-    this._token    = token;
-    this._onUpdate = onUpdate;
-    this._onOnline = onOnline;
-    this._onOffline = onOffline;
-    this._states   = {};
-    this._ws       = null;
-    this._msgId    = 1;
-    this._backoff  = 2000;
-    this._connect();
-  }
+  const solar = get(_cfg.solar_kwh_entity);
+  document.getElementById('sb-solar').textContent = isNaN(solar) ? '--' : solar.toFixed(1);
 
-  _connect() {
-    const wsUrl = this._hassUrl.replace(/^http/, 'ws') + '/api/websocket';
-    this._ws = new WebSocket(wsUrl);
+  const grid = get(_cfg.grid_consumed_entity);
+  document.getElementById('sb-grid').textContent = isNaN(grid) ? '--' : grid.toFixed(1);
 
-    this._ws.onopen = () => { this._backoff = 2000; };
-
-    this._ws.onmessage = (evt) => {
-      const msg = JSON.parse(evt.data);
-      if (msg.type === 'auth_required') {
-        this._ws.send(JSON.stringify({ type: 'auth', access_token: this._token }));
-      } else if (msg.type === 'auth_ok') {
-        this._ws.send(JSON.stringify({ id: this._msgId++, type: 'get_states' }));
-        this._ws.send(JSON.stringify({ id: this._msgId++, type: 'subscribe_events', event_type: 'state_changed' }));
-        this._onOnline?.();
-      } else if (msg.type === 'auth_invalid') {
-        console.error('[HA] Auth invalid');
-      } else if (msg.type === 'result' && Array.isArray(msg.result)) {
-        msg.result.forEach(s => { this._states[s.entity_id] = s; });
-        this._onUpdate(this._states);
-      } else if (msg.type === 'event' && msg.event?.event_type === 'state_changed') {
-        const { entity_id, new_state } = msg.event.data;
-        if (new_state) this._states[entity_id] = new_state;
-        else delete this._states[entity_id];
-        this._onUpdate(this._states);
-      }
-    };
-
-    this._ws.onclose = () => {
-      this._onOffline?.();
-      setTimeout(() => this._connect(), this._backoff);
-      this._backoff = Math.min(this._backoff * 2, 30000);
-    };
-
-    this._ws.onerror = () => this._ws.close();
-  }
+  const ev = get(_cfg.ev_soc_entity);
+  document.getElementById('sb-ev').textContent = isNaN(ev) ? '--' : Math.round(ev);
 }
 
-// ── Dashboard renderer ──────────────────────────────────────────
-let _entityConfig = {};
+// ── Cast Receiver ─────────────────────────────────────────────
+const context = cast.framework.CastReceiverContext.getInstance();
 
-function numVal(states, entityId) {
-  return parseFloat(states[entityId]?.state ?? 'NaN');
-}
-
-function updateUI(states) {
-  // Solar
-  const solar = numVal(states, _entityConfig.solar_entity);
-  el('v-solar').textContent = fmt(Math.max(0, solar / 1000));
-
-  // House load
-  const house = numVal(states, _entityConfig.power_entity);
-  el('v-house').textContent = fmt(Math.max(0, house / 1000));
-
-  // Grid (positive = import, negative = export)
-  const grid = numVal(states, _entityConfig.grid_power_entity);
-  const gridKw = grid / 1000;
-  el('v-grid').textContent = fmt(Math.abs(gridKw));
-  const gridDir = el('v-grid-dir');
-  const gridIcon = el('grid-icon');
-  if (!isNaN(gridKw)) {
-    if (gridKw > 0.05) {
-      gridDir.textContent = '↓ Import';
-      gridDir.style.color = 'var(--grid-in)';
-      gridIcon.className = 'tile-icon c-gridin';
-    } else if (gridKw < -0.05) {
-      gridDir.textContent = '↑ Export';
-      gridDir.style.color = 'var(--grid-out)';
-      gridIcon.className = 'tile-icon c-gridout';
-    } else {
-      gridDir.textContent = 'Balans';
-      gridDir.style.color = 'var(--muted2)';
-      gridIcon.className = 'tile-icon';
-    }
-  }
-
-  // Battery SOC
-  const battSoc = numVal(states, _entityConfig.battery_soc_entity);
-  el('v-batt-soc').textContent = isNaN(battSoc) ? '--' : Math.round(battSoc);
-
-  // Battery power
-  const battPwr = numVal(states, _entityConfig.battery_power_entity);
-  if (!isNaN(battPwr)) {
-    const battKw = battPwr / 1000;
-    el('v-batt-power').textContent = battKw > 0.05
-      ? `↑ Laddas ${fmt(battKw)} kW`
-      : battKw < -0.05
-      ? `↓ Urladdas ${fmt(Math.abs(battKw))} kW`
-      : 'Standby';
-  }
-
-  // Spot price (value may be in kr or öre — check attributes unit)
-  const priceState = states[_entityConfig.spot_price_entity];
-  if (priceState) {
-    const priceVal = parseFloat(priceState.state);
-    const unit = priceState.attributes?.unit_of_measurement ?? '';
-    // Convert kr/kWh → öre/kWh if needed
-    const ore = unit.includes('kr') && !unit.includes('öre')
-      ? priceVal * 100
-      : priceVal;
-    el('v-price').textContent = isNaN(ore) ? '--' : Math.round(ore);
-  }
-
-  // Temperatures
-  const tempUv = numVal(states, _entityConfig.temp_uv_entity);
-  const tempOv = numVal(states, _entityConfig.temp_ov_entity);
-  el('v-temp-uv').textContent = isNaN(tempUv) ? '--' : fmt(tempUv, 1);
-  el('v-temp-ov').textContent = isNaN(tempOv) ? '--' : fmt(tempOv, 1);
-
-  // Footer: EV
-  const ev = numVal(states, _entityConfig.ev_soc_entity);
-  el('f-ev').textContent = isNaN(ev) ? '-- %' : `${Math.round(ev)} %`;
-
-  // Footer: EV charger
-  const charger = numVal(states, _entityConfig.ev_charger_power_entity);
-  el('f-charger').textContent = isNaN(charger) ? '-- kW' : `${fmt(charger / 1000)} kW`;
-
-  // Footer: heat pump
-  const hp = numVal(states, _entityConfig.varmepump_power_entity);
-  el('f-hp').textContent = isNaN(hp) ? '-- kW' : `${fmt(hp)} kW`;
-
-  // Footer: guest house temp
-  const gh = numVal(states, _entityConfig.temp_gh_entity);
-  el('f-gh').textContent = isNaN(gh) ? '-- °C' : `${fmt(gh, 1)} °C`;
-}
-
-// ── Cast Receiver setup ─────────────────────────────────────────
-const context  = cast.framework.CastReceiverContext.getInstance();
-const manager  = context.getPlayerManager();
-
-context.addCustomMessageListener(CAST_NAMESPACE, (event) => {
+context.addCustomMessageListener(CAST_NAMESPACE, async (event) => {
   const msg = event.data;
   if (msg.type !== 'INIT') return;
 
-  _entityConfig = msg.entityConfig ?? {};
+  _cfg = msg.entityConfig ?? {};
 
-  // Show dashboard, hide waiting screen
-  $('waiting').style.display = 'none';
-  const dash = $('dashboard');
-  dash.style.display = 'flex';
+  document.getElementById('waiting-title').textContent = 'Laddar dashboard…';
+  document.getElementById('waiting-sub').innerHTML =
+    '<div class="spinner"></div>';
 
-  // Connect to Home Assistant
-  new HAReceiverConn(
-    msg.hassUrl,
-    msg.token,
-    (states) => updateUI(states),
-    () => { $('conn-dot').classList.remove('offline'); },
-    () => { $('conn-dot').classList.add('offline'); }
-  );
+  try {
+    await loadViaEval('./energy-dashboard-card.js.html');
+    await loadScript('./ha-connection.js');
+  } catch (e) {
+    document.getElementById('waiting-title').textContent = 'Laddning misslyckades';
+    document.getElementById('waiting-sub').textContent = e.message;
+    console.error('[Receiver]', e);
+    return;
+  }
+
+  const card = document.querySelector('energy-dashboard-card');
+  card.setConfig(_cfg);
+
+  // Intercept hass setter to also update sidebar stats
+  const proto    = Object.getPrototypeOf(card);
+  const origDesc = Object.getOwnPropertyDescriptor(proto, 'hass');
+  if (origDesc?.set) {
+    Object.defineProperty(card, 'hass', {
+      set(h) { origDesc.set.call(this, h); updateSidebar(h); },
+      get()  { return this._hass; },
+      configurable: true,
+    });
+  }
+
+  const haConn = new HAConnection();
+  haConn.onOnline  = () => {
+    document.getElementById('conn-dot').classList.remove('offline');
+    document.getElementById('conn-lbl').textContent = 'Live';
+  };
+  haConn.onOffline = () => {
+    document.getElementById('conn-dot').classList.add('offline');
+    document.getElementById('conn-lbl').textContent = 'Offline';
+  };
+  haConn.setCard(card);
+
+  // Reveal UI
+  document.getElementById('waiting').style.display     = 'none';
+  document.getElementById('card-wrap').style.display   = 'block';
+  document.getElementById('sidebar-left').style.display  = 'flex';
+  document.getElementById('sidebar-right').style.display = 'flex';
+
+  haConn.connect(msg.hassUrl, msg.token);
 });
 
 context.start({ disableIdleTimeout: true });
