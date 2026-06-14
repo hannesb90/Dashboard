@@ -5286,17 +5286,7 @@ class EnergyDashboardCard extends HTMLElement {
       if (!teslaImg) {
         const img = document.createElement('img');
         img.id    = 'popup-tesla-img';
-        const _teslaBase = (this._config?.hassUrl || localStorage.getItem('ha_url') || '').replace(/\/$/,'');
-        const _teslaToken = this._hass?.auth?.data?.access_token || localStorage.getItem('ha_token') || '';
-        const _teslaUrl = _teslaBase + '/local/teslan.png';
-        if (_teslaToken && _teslaBase) {
-          fetch(_teslaUrl, { headers: { Authorization: `Bearer ${_teslaToken}` } })
-            .then(r => r.ok ? r.blob() : Promise.reject())
-            .then(b => { img.src = URL.createObjectURL(b); })
-            .catch(() => {});
-        } else {
-          img.src = _teslaUrl;
-        }
+        img.src   = (this._config?.hassUrl || localStorage.getItem('ha_url') || '').replace(/\/$/,'') + '/local/teslan.png';
         img.alt   = 'Tesla';
         img.style.cssText = 'width:100%;border-radius:12px;object-fit:contain;display:block;margin-bottom:8px;max-height:160px;background:transparent;';
         chartWrap?.parentNode?.insertBefore(img, chartWrap);
@@ -6574,19 +6564,7 @@ class EnergyDashboardCard extends HTMLElement {
     const popup = this._q('#filip-prank-popup');
     if (!popup) return;
     const img = popup.querySelector('#filip-img');
-    if (img && !img.src) {
-      const _flipBase  = (this._config?.hassUrl || localStorage.getItem('ha_url') || '').replace(/\/$/,'');
-      const _flipToken = this._hass?.auth?.data?.access_token || localStorage.getItem('ha_token') || '';
-      const _flipUrl   = _flipBase + '/local/filip.png';
-      if (_flipToken && _flipBase) {
-        fetch(_flipUrl, { headers: { Authorization: `Bearer ${_flipToken}` } })
-          .then(r => r.ok ? r.blob() : Promise.reject())
-          .then(b => { img.src = URL.createObjectURL(b); })
-          .catch(() => {});
-      } else {
-        img.src = _flipUrl;
-      }
-    }
+    if (img && !img.src) img.src = (this._config?.hassUrl || localStorage.getItem('ha_url') || '').replace(/\/$/,'') + '/local/filip.png';
     popup.style.display = 'flex';
   }
 
@@ -6884,25 +6862,10 @@ class EnergyDashboardCard extends HTMLElement {
     if (img.dataset.bg !== src) {
       img.dataset.bg = src;
       img.style.visibility = 'hidden';
-
-      const token = this._hass?.auth?.data?.access_token || localStorage.getItem('ha_token') || '';
-      if (token && haBase) {
-        // Fetch with Bearer token so Nabu Casa / authenticated HA endpoints are reached.
-        fetch(actualSrc, { headers: { Authorization: `Bearer ${token}` } })
-          .then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
-          .then(blob => {
-            if (img._blobUrl) URL.revokeObjectURL(img._blobUrl);
-            img._blobUrl = URL.createObjectURL(blob);
-            img.src = img._blobUrl;
-            img.style.visibility = 'visible';
-            img.style.display = 'block';
-          })
-          .catch(() => { delete img.dataset.bg; });
-      } else {
-        img.onload = function(){ img.style.visibility='visible'; img.style.display='block'; };
-        img.onerror = function(){ img.style.visibility='hidden'; delete img.dataset.bg; };
-        img.src = actualSrc;
-      }
+      console.log('[Hero] Loading image:', actualSrc);
+      img.onload = function(){ img.style.visibility='visible'; img.style.display='block'; console.log('[Hero] Image loaded OK:', actualSrc); };
+      img.onerror = function(e){ img.style.visibility='hidden'; delete img.dataset.bg; console.error('[Hero] Image failed:', actualSrc, e); };
+      img.src = actualSrc;
     }
   }
 
