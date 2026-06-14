@@ -2596,7 +2596,7 @@ class EnergyDashboardCard extends HTMLElement {
 
   <div class="filip-prank-overlay" id="filip-prank-popup" onclick="this.getRootNode().host._closeFilipPrank()">
     <div class="filip-prank-card" onclick="event.stopPropagation()">
-      <img src="/local/filip.png" alt="Filip">
+      <img id="filip-img" src="" alt="Filip">
       <div class="filip-prank-text">BUUUU rör inte mina lampor! Puss o kram önskar Filip</div>
     </div>
   </div>
@@ -5248,7 +5248,7 @@ class EnergyDashboardCard extends HTMLElement {
       if (!teslaImg) {
         const img = document.createElement('img');
         img.id    = 'popup-tesla-img';
-        img.src   = '/local/teslan.png';
+        img.src   = (this._config?.hassUrl || '').replace(/\/$/,'') + '/local/teslan.png';
         img.alt   = 'Tesla';
         img.style.cssText = 'width:100%;border-radius:12px;object-fit:contain;display:block;margin-bottom:8px;max-height:160px;background:transparent;';
         chartWrap?.parentNode?.insertBefore(img, chartWrap);
@@ -6524,7 +6524,10 @@ class EnergyDashboardCard extends HTMLElement {
 
   _openFilipPrank() {
     const popup = this._q('#filip-prank-popup');
-    if (popup) popup.style.display = 'flex';
+    if (!popup) return;
+    const img = popup.querySelector('#filip-img');
+    if (img && !img.src) img.src = (this._config?.hassUrl || '').replace(/\/$/,'') + '/local/filip.png';
+    popup.style.display = 'flex';
   }
 
   _closeFilipPrank() {
@@ -6814,8 +6817,9 @@ class EnergyDashboardCard extends HTMLElement {
     if (!isDay && !winter) src = '/local/natt1.png';
     if (!isDay &&  winter) src = '/local/snö_natt_1.png';
 
-    // Use embedded base64 in preview, /local/ path in HA
-    const actualSrc = (_PREVIEW_IMAGES && _PREVIEW_IMAGES[src]) || src;
+    // Prefix with HA base URL when running as standalone PWA (different origin)
+    const haBase = (this._config?.hassUrl || '').replace(/\/$/, '');
+    const actualSrc = (_PREVIEW_IMAGES && _PREVIEW_IMAGES[src]) || (haBase ? haBase + src : src);
 
     if (img.dataset.bg !== src) {
       img.dataset.bg = src;

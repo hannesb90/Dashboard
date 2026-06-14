@@ -202,7 +202,7 @@
       };
       haConn.onOffline = () => setConnected(false);
       haConn.onOnline  = () => setConnected(true);
-      const cfg = buildConfig();
+      const cfg = { ...buildConfig(), hassUrl };
       card.setConfig(cfg);
       injectShadowFix();
       haConn.setCard(card);
