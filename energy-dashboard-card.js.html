@@ -7386,60 +7386,44 @@ class EnergyDashboardCard extends HTMLElement {
     let longPressTimer = null;
     let downX = 0, downY = 0;
     let didDrag = false;
+    let snapRects = null; // frozen card positions taken at drag-start
+    let lastIdx   = -1;   // last insertion index — skip redundant DOM moves
 
     const liveCards = () => [...container.querySelectorAll('.card')]
       .filter(c => c !== dragCard && c !== placeholder);
 
-    const findTarget = (x, y) => {
-      const cards = liveCards();
-      // Exact hit first
-      const hit = cards.find(c => {
-        const r = c.getBoundingClientRect();
-        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-      });
-      if (hit) return hit;
-      // Fall back to closest card center (handles gaps between rows)
-      let best = null, bestDist = Infinity;
-      for (const c of cards) {
-        const r = c.getBoundingClientRect();
-        const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
-        if (d < bestDist) { bestDist = d; best = c; }
-      }
-      return best;
-    };
-
     const beginDrag = (e, card) => {
       dragCard = card;
-      didDrag = false;
+      didDrag  = false;
       const rect = card.getBoundingClientRect();
       offsetX = e.clientX - rect.left;
       offsetY = e.clientY - rect.top;
 
-      // Placeholder occupies the original slot; card is detached so the grid
-      // has no extra invisible cell — allows dragging into genuinely empty areas.
       placeholder = document.createElement('div');
       placeholder.className = card.className;
       placeholder.style.cssText = 'opacity:0;pointer-events:none';
       container.insertBefore(placeholder, card);
-      card.remove();
+      card.remove(); // detach so the grid has no phantom slot
 
-      // Floating ghost follows the finger
+      // Freeze positions NOW — used for all hit-testing during the drag.
+      // This prevents the reflow feedback loop where moving the placeholder
+      // shifts other cards and flips the insertion point back.
+      snapRects = liveCards().map(c => ({ el: c, r: c.getBoundingClientRect() }));
+      lastIdx   = -1;
+
       ghost = card.cloneNode(true);
       ghost.style.cssText = [
-        `position:fixed`,
+        'position:fixed',
         `width:${rect.width}px`,
         `height:${rect.height}px`,
         `left:${rect.left}px`,
         `top:${rect.top}px`,
-        `margin:0`,
-        `z-index:99999`,
-        `pointer-events:none`,
-        `opacity:0.93`,
-        `transform:scale(1.06)`,
-        `box-shadow:0 16px 48px rgba(0,0,0,0.65)`,
-        `transition:box-shadow 0.2s,transform 0.2s`,
+        'margin:0', 'z-index:99999', 'pointer-events:none',
+        'opacity:0.93', 'transform:scale(1.06)',
+        'box-shadow:0 16px 48px rgba(0,0,0,0.65)',
+        'transition:box-shadow 0.2s,transform 0.2s',
         `border-radius:${getComputedStyle(card).borderRadius}`,
-        `overflow:hidden`,
+        'overflow:hidden',
       ].join(';');
       root.appendChild(ghost);
       container.style.touchAction = 'none';
@@ -7452,9 +7436,7 @@ class EnergyDashboardCard extends HTMLElement {
       longPressTimer = null;
       if (!dragCard) return;
 
-      if (placeholder?.parentNode) {
-        placeholder.replaceWith(dragCard);
-      }
+      if (placeholder?.parentNode) placeholder.replaceWith(dragCard);
       dragCard.style.cssText = '';
       ghost?.remove();
       container.style.touchAction = '';
@@ -7462,11 +7444,11 @@ class EnergyDashboardCard extends HTMLElement {
 
       if (didDrag) {
         this._saveCardOrder(container);
-        // Swallow the click that fires after pointerup so popups don't open
-        container.addEventListener('click', e => { e.stopPropagation(); }, { once: true, capture: true });
+        container.addEventListener('click', ev => ev.stopPropagation(), { once: true, capture: true });
       }
 
-      dragCard = null; ghost = null; placeholder = null; didDrag = false;
+      dragCard = null; ghost = null; placeholder = null;
+      snapRects = null; lastIdx = -1; didDrag = false;
     };
 
     container.addEventListener('pointerdown', (e) => {
@@ -7484,7 +7466,7 @@ class EnergyDashboardCard extends HTMLElement {
         }
         return;
       }
-      if (!dragCard || !ghost) return;
+      if (!dragCard || !ghost || !snapRects) return;
       e.preventDefault();
       didDrag = true;
 
@@ -7493,22 +7475,25 @@ class EnergyDashboardCard extends HTMLElement {
       ghost.style.left = gLeft + 'px';
       ghost.style.top  = gTop  + 'px';
 
-      // Use the ghost CENTER as reference — avoids oscillation caused by
-      // placeholder reflow shifting card midpoints under the pointer tip.
+      // Ghost centre determines the target slot.
       const gcx = gLeft + ghost.offsetWidth  / 2;
       const gcy = gTop  + ghost.offsetHeight / 2;
 
-      const target = findTarget(gcx, gcy);
-      if (!target) return;
-
-      const r = target.getBoundingClientRect();
-      const insertBefore = gcy < r.top + r.height / 2;
-      const newNext = insertBefore ? target : (target.nextSibling || null);
-
-      // Skip DOM update if placement hasn't changed
-      if (placeholder.nextSibling !== newNext && placeholder !== target) {
-        container.insertBefore(placeholder, newNext);
+      // Hit-test against the FROZEN snapshot — immune to layout reflow.
+      let newIdx = snapRects.length; // default: append at end
+      for (let i = 0; i < snapRects.length; i++) {
+        const { r } = snapRects[i];
+        if (gcx >= r.left && gcx <= r.right && gcy >= r.top && gcy <= r.bottom) {
+          newIdx = gcy < r.top + r.height / 2 ? i : i + 1;
+          break;
+        }
       }
+
+      if (newIdx === lastIdx) return;
+      lastIdx = newIdx;
+
+      const cards = liveCards();
+      container.insertBefore(placeholder, cards[newIdx] ?? null);
     }, { passive: false });
 
     container.addEventListener('pointerup',     endDrag);
