@@ -5735,6 +5735,8 @@ class EnergyDashboardCard extends HTMLElement {
 
   _maSearchDebounce(val) {
     clearTimeout(this._maSearchTimer);
+    this._searchAbort?.abort();   // cancel any in-flight search
+    this._searchAbort = null;
     const res = this._q('#ma-search-results');
     if (!val || val.trim().length < 2) {
       if (res) res.innerHTML = '<div class="empty-state">Skriv minst två tecken.</div>';
@@ -5909,13 +5911,15 @@ class EnergyDashboardCard extends HTMLElement {
     this._spotifySaveTokens(await resp.json());
   }
 
-  async _spotifyFetch(path, opts = {}) {
+  async _spotifyFetch(path, opts = {}, externalSignal = null) {
     if (this._spotifyTokenExpiry && Date.now() > this._spotifyTokenExpiry - 30000) {
       await this._spotifyRefreshToken();
     }
     if (!this._spotifyToken) return null;
-    const ctrl = new AbortController();
+    const ctrl  = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 10000);
+    // Forward external abort (e.g. from search cancellation) to our controller
+    externalSignal?.addEventListener('abort', () => ctrl.abort(), { once: true });
     try {
       const resp = await fetch(`https://api.spotify.com/v1${path}`, {
         ...opts,
@@ -6098,14 +6102,18 @@ class EnergyDashboardCard extends HTMLElement {
       res.innerHTML = '<div class="empty-state">Anslut Spotify för att söka.</div>';
       return;
     }
+    const abort = new AbortController();
+    this._searchAbort = abort;
     res.innerHTML = '<div class="empty-state">Söker…</div>';
     let data;
     try {
-      data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=5`);
+      data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=5`, {}, abort.signal);
     } catch(e) {
+      if (abort.signal.aborted) return;  // newer search already started – discard silently
       res.innerHTML = `<div class="empty-state">Sökning misslyckades: ${this._escapeHtml(e.message)}</div>`;
       return;
     }
+    if (abort.signal.aborted) return;
     if (!data) { res.innerHTML = '<div class="empty-state">Sökning misslyckades – kontrollera att Spotify är ansluten.</div>'; return; }
 
     const items = [];
