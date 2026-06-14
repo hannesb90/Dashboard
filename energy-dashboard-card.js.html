@@ -6074,10 +6074,19 @@ class EnergyDashboardCard extends HTMLElement {
     const res = this._q('#ma-search-results');
     const q   = String(query ?? '').trim();
     if (!res || q.length < 2) return;
+    if (!this._spotifyToken) {
+      res.innerHTML = '<div class="empty-state">Anslut Spotify för att söka.</div>';
+      return;
+    }
     res.innerHTML = '<div class="empty-state">Söker…</div>';
-
-    const data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=5&market=SE`);
-    if (!data) { res.innerHTML = '<div class="empty-state">Sökning misslyckades.</div>'; return; }
+    let data;
+    try {
+      data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=5&market=SE`);
+    } catch(e) {
+      res.innerHTML = `<div class="empty-state">Fel: ${e.message}</div>`;
+      return;
+    }
+    if (!data) { res.innerHTML = '<div class="empty-state">Sökning misslyckades – kontrollera att Spotify är ansluten.</div>'; return; }
 
     const items = [];
     let html = '';
@@ -6208,9 +6217,9 @@ class EnergyDashboardCard extends HTMLElement {
     const playlists = this._q('#ma-playlists-card');
     if (banner)    banner.style.display    = authenticated ? 'none' : 'flex';
     if (player)    player.style.display    = authenticated ? 'flex'  : 'none';
-    if (search)    search.style.display    = authenticated ? ''      : 'none';
-    if (queue)     queue.style.display     = authenticated ? ''      : 'none';
-    if (playlists) playlists.style.display = authenticated ? ''      : 'none';
+    if (search)    search.style.display    = authenticated ? 'block' : 'none';
+    if (queue)     queue.style.display     = authenticated ? 'block' : 'none';
+    if (playlists) playlists.style.display = authenticated ? 'block' : 'none';
   }
 
   _spotifyLogout() {
