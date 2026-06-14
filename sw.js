@@ -5,6 +5,7 @@ const MUST_CACHE = [
   './index.html',
   './manifest.json',
   './ha-connection.js',
+  './cast-sender.js',
 ];
 
 self.addEventListener('install', e => {
@@ -13,7 +14,7 @@ self.addEventListener('install', e => {
       .then(c => c.addAll(MUST_CACHE))
       .then(() => {
         caches.open(CACHE).then(c =>
-          c.addAll(['./energy-dashboard-card.js.html', './icons/icon.svg']).catch(() => {})
+          c.addAll(['./energy-dashboard-card.js.html', './icons/icon.svg', './receiver.html']).catch(() => {})
         );
       })
       .then(() => self.skipWaiting())

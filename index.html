@@ -189,10 +189,7 @@
       if (old) old.remove();
       const s = document.createElement('style');
       s.setAttribute('data-pwa-fix', '');
-      s.textContent = [
-        '.shell { padding-top: env(safe-area-inset-top, 0px) !important; }',
-        '.nav, #main-nav { padding: 6px 8px 0px !important; border-radius: 0 !important; }',
-      ].join('\n');
+      s.textContent = '.shell { padding-top: env(safe-area-inset-top, 0px) !important; }';
       root.appendChild(s);
     }
 
@@ -205,11 +202,19 @@
       };
       haConn.onOffline = () => setConnected(false);
       haConn.onOnline  = () => setConnected(true);
-      card.setConfig(buildConfig());
+      const cfg = buildConfig();
+      card.setConfig(cfg);
       injectShadowFix();
       haConn.setCard(card);
       showApp();
       haConn.connect(hassUrl, token);
+      // Configure Cast sender with credentials once connection is started
+      if (window.castSender) {
+        window.castSender.setConfig({ hassUrl, token, entityConfig: cfg });
+      } else {
+        // castSender may still be loading — set config once it's ready
+        window.__castPendingConfig = { hassUrl, token, entityConfig: cfg };
+      }
     }
 
     document.getElementById('ha-url').addEventListener('input', function () {
@@ -243,6 +248,10 @@
       try {
         await loadViaEval('energy-dashboard-card.js.html');
         await loadScript('ha-connection.js');
+        // Load Cast Sender SDK + integration (non-blocking — Cast may not be available)
+        loadScript('//www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js')
+          .then(() => loadScript('cast-sender.js'))
+          .catch(() => {});
       } catch {
         showAuth('Kunde inte ladda appen — kontrollera nätverksanslutningen.');
         return;

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Energy – Cast</title>
+  <!-- Must load before any Cast API calls -->
+  <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100vw; height: 100vh; background: #060B04; overflow: hidden; }
+    body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; color: #FFF9F0; }
+
+    /* ── Waiting screen ─────────────────────────────── */
+    #waiting {
+      position: fixed; inset: 0; z-index: 999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px; background: #060B04;
+    }
+    #waiting-title { font-size: 15px; color: rgba(255,249,240,0.45); }
+    #waiting-sub   { font-size: 12px; color: rgba(255,249,240,0.25); min-height: 36px; display: flex; align-items: center; justify-content: center; }
+    .spinner {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 2.5px solid rgba(74,98,65,0.2); border-top-color: #4A6241;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Sidebars (fixed, outside card) ────────────── */
+    .sidebar {
+      position: fixed; top: 0; height: 100vh;
+      width: calc((100vw - 390px) / 2);
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 6px;
+      background: #060B04;
+    }
+    #sidebar-left  { left: 0;  border-right: 1px solid rgba(255,249,240,0.07); }
+    #sidebar-right { right: 0; border-left:  1px solid rgba(255,249,240,0.07); }
+
+    /* Left: clock */
+    .sb-time {
+      font-size: clamp(38px, 4.8vw, 64px);
+      font-weight: 300; letter-spacing: -2px; line-height: 1;
+    }
+    .sb-date {
+      font-size: 12px; color: rgba(255,249,240,0.35);
+      font-weight: 500; letter-spacing: 0.4px;
+      margin-bottom: 20px;
+    }
+    .conn-row {
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 4px;
+    }
+    .conn-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #4A6241; transition: background 0.5s;
+      flex-shrink: 0;
+    }
+    .conn-dot.offline { background: #E07060; }
+    .conn-lbl {
+      font-size: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.7px;
+      color: rgba(255,249,240,0.25);
+    }
+    .cast-watermark { margin-top: 28px; opacity: 0.12; }
+
+    /* Right: quick stats */
+    .stat {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 3px;
+      padding: 12px 0;
+    }
+    .stat-lbl {
+      font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: rgba(255,249,240,0.28);
+    }
+    .stat-val {
+      font-size: clamp(24px, 3vw, 38px);
+      font-weight: 300; letter-spacing: -0.5px; line-height: 1;
+    }
+    .stat-unit { font-size: 11px; color: rgba(255,249,240,0.3); }
+    .stat-div  { width: 28px; height: 1px; background: rgba(255,249,240,0.08); margin: 2px 0; }
+
+    /* ── Card wrapper ───────────────────────────────── */
+    /*
+     * transform: translateX(-50%) serves two purposes:
+     *   1. Centers the 390 px card on the 1024 px display.
+     *   2. Creates a new CSS containing block so every
+     *      position:fixed element inside the card's Shadow DOM
+     *      is contained within the 390 px wrapper instead of
+     *      spanning the full Nest Hub viewport.
+     */
+    #card-wrap {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 390px;
+      height: 100vh;
+      overflow: hidden;
+      display: none;
+    }
+    energy-dashboard-card { display: block; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+
+<!-- Waiting -->
+<div id="waiting">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none"
+       stroke="rgba(255,249,240,0.35)" stroke-width="1.5" stroke-linecap="round">
+    <path d="M2 16.1A5 5 0 0 1 5.9 20"/>
+    <path d="M2 12.05A9 9 0 0 1 9.95 20"/>
+    <path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/>
+    <line x1="2" y1="20" x2="2.01" y2="20"/>
+  </svg>
+  <div id="waiting-title">Energy Dashboard</div>
+  <div id="waiting-sub">Öppna appen och tryck på cast-ikonen</div>
+</div>
+
+<!-- Left sidebar: klocka + status -->
+<div class="sidebar" id="sidebar-left">
+  <div class="sb-time" id="sb-time">--:--</div>
+  <div class="sb-date" id="sb-date">--</div>
+  <div class="conn-row">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span class="conn-lbl" id="conn-lbl">Live</span>
+  </div>
+  <div class="cast-watermark">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+         stroke="#FFF9F0" stroke-width="1.5" stroke-linecap="round">
+      <path d="M2 16.1A5 5 0 0 1 5.9 20"/>
+      <path d="M2 12.05A9 9 0 0 1 9.95 20"/>
+      <path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/>
+      <line x1="2" y1="20" x2="2.01" y2="20"/>
+    </svg>
+  </div>
+</div>
+
+<!-- Main card (portrait, centered) -->
+<div id="card-wrap">
+  <energy-dashboard-card></energy-dashboard-card>
+</div>
+
+<!-- Right sidebar: dagsstats -->
+<div class="sidebar" id="sidebar-right">
+  <div class="stat">
+    <div class="stat-lbl">Solar idag</div>
+    <div class="stat-val" id="sb-solar">--</div>
+    <div class="stat-unit">kWh</div>
+  </div>
+  <div class="stat-div"></div>
+  <div class="stat">
+    <div class="stat-lbl">Förbrukat</div>
+    <div class="stat-val" id="sb-grid">--</div>
+    <div class="stat-unit">kWh</div>
+  </div>
+  <div class="stat-div"></div>
+  <div class="stat">
+    <div class="stat-lbl">Tesla</div>
+    <div class="stat-val" id="sb-ev">--</div>
+    <div class="stat-unit">%</div>
+  </div>
+</div>
+
+<script>
+const CAST_NAMESPACE = 'urn:x-cast:energy-dashboard';
+const DAYS   = ['Sön','Mån','Tis','Ons','Tor','Fre','Lör'];
+const MONTHS = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
+
+// ── Clock ─────────────────────────────────────────────────────
+function tickClock() {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  document.getElementById('sb-time').textContent = `${hh}:${mm}`;
+  document.getElementById('sb-date').textContent =
+    `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+}
+setInterval(tickClock, 10000);
+tickClock();
+
+// ── Loaders ───────────────────────────────────────────────────
+function loadViaEval(url) {
+  return fetch(url).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.text();
+  }).then(code => (0, eval)(code));
+}
+function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    const s = Object.assign(document.createElement('script'), { src: url });
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+// ── Sidebar stats ─────────────────────────────────────────────
+let _cfg = {};
+function updateSidebar(hass) {
+  const st = hass.states;
+  const get = (id) => parseFloat(st[id]?.state ?? 'NaN');
+
+  const solar = get(_cfg.solar_kwh_entity);
+  document.getElementById('sb-solar').textContent = isNaN(solar) ? '--' : solar.toFixed(1);
+
+  const grid = get(_cfg.grid_consumed_entity);
+  document.getElementById('sb-grid').textContent = isNaN(grid) ? '--' : grid.toFixed(1);
+
+  const ev = get(_cfg.ev_soc_entity);
+  document.getElementById('sb-ev').textContent = isNaN(ev) ? '--' : Math.round(ev);
+}
+
+// ── Cast Receiver ─────────────────────────────────────────────
+const context = cast.framework.CastReceiverContext.getInstance();
+
+context.addCustomMessageListener(CAST_NAMESPACE, async (event) => {
+  const msg = event.data;
+  if (msg.type !== 'INIT') return;
+
+  _cfg = msg.entityConfig ?? {};
+
+  document.getElementById('waiting-title').textContent = 'Laddar dashboard…';
+  document.getElementById('waiting-sub').innerHTML =
+    '<div class="spinner"></div>';
+
+  try {
+    await loadViaEval('./energy-dashboard-card.js.html');
+    await loadScript('./ha-connection.js');
+  } catch (e) {
+    document.getElementById('waiting-title').textContent = 'Laddning misslyckades';
+    document.getElementById('waiting-sub').textContent = e.message;
+    console.error('[Receiver]', e);
+    return;
+  }
+
+  const card = document.querySelector('energy-dashboard-card');
+  card.setConfig(_cfg);
+
+  // Intercept hass setter to also update sidebar stats
+  const proto    = Object.getPrototypeOf(card);
+  const origDesc = Object.getOwnPropertyDescriptor(proto, 'hass');
+  if (origDesc?.set) {
+    Object.defineProperty(card, 'hass', {
+      set(h) { origDesc.set.call(this, h); updateSidebar(h); },
+      get()  { return this._hass; },
+      configurable: true,
+    });
+  }
+
+  const haConn = new HAConnection();
+  haConn.onOnline  = () => {
+    document.getElementById('conn-dot').classList.remove('offline');
+    document.getElementById('conn-lbl').textContent = 'Live';
+  };
+  haConn.onOffline = () => {
+    document.getElementById('conn-dot').classList.add('offline');
+    document.getElementById('conn-lbl').textContent = 'Offline';
+  };
+  haConn.setCard(card);
+
+  // Reveal UI
+  document.getElementById('waiting').style.display     = 'none';
+  document.getElementById('card-wrap').style.display   = 'block';
+  document.getElementById('sidebar-left').style.display  = 'flex';
+  document.getElementById('sidebar-right').style.display = 'flex';
+
+  haConn.connect(msg.hassUrl, msg.token);
+});
+
+context.start({ disableIdleTimeout: true });
+</script>
+</body>
+</html>
