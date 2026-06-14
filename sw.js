@@ -1,4 +1,4 @@
-const CACHE = 'energy-pwa-v24';
+const CACHE = 'energy-pwa-v25';
 
 const MUST_CACHE = [
   './',
@@ -15,6 +15,7 @@ const IMAGE_CACHE = [
   './images/snö_natt_1.png',
   './images/teslan.png',
   './images/filip.png',
+  './images/mediaomslag.png',
 ];
 
 self.addEventListener('install', e => {
