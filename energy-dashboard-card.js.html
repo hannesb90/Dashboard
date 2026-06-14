@@ -6818,7 +6818,7 @@ class EnergyDashboardCard extends HTMLElement {
     if (!isDay &&  winter) src = '/local/snö_natt_1.png';
 
     // Prefix with HA base URL when running as standalone PWA (different origin)
-    const haBase = (this._config?.hassUrl || '').replace(/\/$/, '');
+    const haBase = (this._config?.hassUrl || localStorage.getItem('ha_url') || '').replace(/\/$/, '');
     const actualSrc = (_PREVIEW_IMAGES && _PREVIEW_IMAGES[src]) || (haBase ? haBase + src : src);
 
     if (img.dataset.bg !== src) {
@@ -7488,16 +7488,26 @@ class EnergyDashboardCard extends HTMLElement {
       e.preventDefault();
       didDrag = true;
 
-      ghost.style.left = (e.clientX - offsetX) + 'px';
-      ghost.style.top  = (e.clientY - offsetY) + 'px';
+      const gLeft = e.clientX - offsetX;
+      const gTop  = e.clientY - offsetY;
+      ghost.style.left = gLeft + 'px';
+      ghost.style.top  = gTop  + 'px';
 
-      const target = findTarget(e.clientX, e.clientY);
-      if (target) {
-        const r = target.getBoundingClientRect();
-        const midY = r.top + r.height / 2;
-        // Use vertical midpoint for cross-row insertion; horizontal for same row
-        const insertBefore = e.clientY < midY || (e.clientY === midY && e.clientX < r.left + r.width / 2);
-        container.insertBefore(placeholder, insertBefore ? target : target.nextSibling);
+      // Use the ghost CENTER as reference — avoids oscillation caused by
+      // placeholder reflow shifting card midpoints under the pointer tip.
+      const gcx = gLeft + ghost.offsetWidth  / 2;
+      const gcy = gTop  + ghost.offsetHeight / 2;
+
+      const target = findTarget(gcx, gcy);
+      if (!target) return;
+
+      const r = target.getBoundingClientRect();
+      const insertBefore = gcy < r.top + r.height / 2;
+      const newNext = insertBefore ? target : (target.nextSibling || null);
+
+      // Skip DOM update if placement hasn't changed
+      if (placeholder.nextSibling !== newNext && placeholder !== target) {
+        container.insertBefore(placeholder, newNext);
       }
     }, { passive: false });
 
