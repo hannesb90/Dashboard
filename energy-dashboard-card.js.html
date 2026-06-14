@@ -1846,7 +1846,7 @@ class EnergyDashboardCard extends HTMLElement {
           </div>
         </div>
         <div class="card span2 openable card-nav" id="card-media" data-nav-to="media">
-          <div class="card-icon">${svg(ICONS.media,'ic-muted')}</div>
+          <div class="card-icon" id="h-media-art">${svg(ICONS.media,'ic-muted')}</div>
           <div class="card-mid home-media-mid">
             <div class="home-media-row">
               <div class="home-media-text">
@@ -5780,6 +5780,19 @@ class EnergyDashboardCard extends HTMLElement {
     }
     this._spotifyInitialized = true;
 
+    // Restore last played track immediately so home card always shows something
+    try {
+      const last = JSON.parse(localStorage.getItem('spotify_last_track') || 'null');
+      if (last) {
+        const hm = this._q('#h-media-val');
+        if (hm && last.mediaLine) { hm.textContent = last.mediaLine; hm.style.color = 'rgba(226,215,196,0.45)'; }
+        const artEl = this._q('#h-media-art');
+        if (artEl && last.art) {
+          artEl.innerHTML = `<img src="${this._escapeAttr(last.art)}" style="width:38px;height:38px;border-radius:7px;object-fit:cover;display:block;" alt="">`;
+        }
+      }
+    } catch {}
+
     // Handle OAuth callback
     const params = new URLSearchParams(window.location.search);
     const code  = params.get('code');
@@ -5998,6 +6011,21 @@ class EnergyDashboardCard extends HTMLElement {
     if (title || artists) this._lastMediaTitle = mediaLine;
     if (hm && (title || artists)) { hm.textContent = mediaLine; hm.style.color = isPlaying ? '#fff' : 'rgba(226,215,196,0.45)'; }
     this._setMediaPlayIcons(isPlaying);
+
+    // Update home card album art
+    const artEl = this._q('#h-media-art');
+    if (artEl) {
+      if (art) {
+        artEl.innerHTML = `<img src="${this._escapeAttr(art)}" style="width:38px;height:38px;border-radius:7px;object-fit:cover;display:block;" alt="">`;
+      } else {
+        artEl.innerHTML = `<svg viewBox="0 0 24 24" style="width:clamp(13px,3.3vw,17px);height:clamp(13px,3.3vw,17px)" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+      }
+    }
+
+    // Persist last played track for display on reload
+    if (title || artists || art) {
+      try { localStorage.setItem('spotify_last_track', JSON.stringify({ title, artists, art, mediaLine })); } catch {}
+    }
 
     const spNameEl = this._q('#sp-speaker-name');
     if (spNameEl && state.device?.name) spNameEl.textContent = state.device.name;
