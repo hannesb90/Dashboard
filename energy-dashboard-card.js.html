@@ -7383,8 +7383,10 @@ class EnergyDashboardCard extends HTMLElement {
         this._saveCustomCards(cards);
         const wrap = document.createElement('div');
         wrap.innerHTML = this._buildCustomCardHtml(cfg);
-        this.shadowRoot.querySelector('.cards').appendChild(wrap.firstElementChild);
+        const cardsEl = this.shadowRoot.querySelector('.cards');
+        cardsEl.appendChild(wrap.firstElementChild);
         this._updateCustomCards();
+        this._saveCardOrder(cardsEl);   // include the new card in the saved order immediately
         close();
       });
     };
@@ -7405,10 +7407,20 @@ class EnergyDashboardCard extends HTMLElement {
 
   _restoreCardOrder(container) {
     const saved = JSON.parse(localStorage.getItem('ha_card_order') || 'null');
-    if (!saved?.length) return;
-    saved.forEach(id => {
-      const card = container.querySelector(`#${CSS.escape(id)}`);
-      if (card) container.appendChild(card);
+    // Collect all cards now, before any moves, so we can append unsaved ones at end.
+    const allCards = [...container.querySelectorAll('.card')];
+    if (saved?.length) {
+      saved.forEach(id => {
+        const card = container.querySelector(`#${CSS.escape(id)}`);
+        if (card) container.appendChild(card);
+      });
+    }
+    // Any card not in the saved list (e.g. newly added) goes after the saved ones,
+    // never stranded at slot 1 because all saved cards were re-appended past it.
+    const savedSet = new Set(saved || []);
+    allCards.forEach(card => {
+      const key = card.id || card.dataset.cardId;
+      if (!key || !savedSet.has(key)) container.appendChild(card);
     });
   }
 
@@ -7419,6 +7431,11 @@ class EnergyDashboardCard extends HTMLElement {
 
     this._restoreCardOrder(container);
     this._applyHiddenCards();
+
+    // Clear any cards that were left invisible by an interrupted drag.
+    container.querySelectorAll('.card').forEach(c => {
+      if (c.style.visibility === 'hidden') c.style.visibility = '';
+    });
 
     let dragCard = null, ghost = null;
     let offsetX = 0, offsetY = 0;
@@ -7484,7 +7501,7 @@ class EnergyDashboardCard extends HTMLElement {
         ghost.style.left = (clientX - offsetX) + 'px';
         ghost.style.top  = (clientY - offsetY) + 'px';
 
-        const HIT = 6;
+        const HIT = 12;
         let target = null;
         for (const c of otherCards()) {
           const r = c.getBoundingClientRect();
