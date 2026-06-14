@@ -6104,20 +6104,18 @@ class EnergyDashboardCard extends HTMLElement {
     }
     const abort = new AbortController();
     this._searchAbort = abort;
-    // Only show "Söker…" after 500ms — keep existing results visible until then
-    const loadingTimer = setTimeout(() => {
-      if (!abort.signal.aborted) res.innerHTML = '<div class="empty-state">Söker…</div>';
-    }, 500);
+    // Only show "Söker…" if there are no results to display yet — otherwise keep old results visible
+    if (!res.querySelector('.ma-sr-item')) {
+      res.innerHTML = '<div class="empty-state">Söker…</div>';
+    }
     let data;
     try {
       data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=10`, {}, abort.signal);
     } catch(e) {
-      clearTimeout(loadingTimer);
       if (abort.signal.aborted) return;  // newer search already started – discard silently
       res.innerHTML = `<div class="empty-state">Sökning misslyckades: ${this._escapeHtml(e.message)}</div>`;
       return;
     }
-    clearTimeout(loadingTimer);
     if (abort.signal.aborted) return;
     if (!data) { res.innerHTML = '<div class="empty-state">Sökning misslyckades – kontrollera att Spotify är ansluten.</div>'; return; }
 
