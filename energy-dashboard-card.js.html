@@ -7405,11 +7405,14 @@ class EnergyDashboardCard extends HTMLElement {
       container.insertBefore(placeholder, card);
       card.remove(); // detach so the grid has no phantom slot
 
-      // Freeze positions NOW — used for all hit-testing during the drag.
-      // This prevents the reflow feedback loop where moving the placeholder
-      // shifts other cards and flips the insertion point back.
-      snapRects = liveCards().map(c => ({ el: c, r: c.getBoundingClientRect() }));
-      lastIdx   = -1;
+      // Freeze positions NOW — used for ALL hit-testing during the drag.
+      // Index 0 = the placeholder's own slot (the card's original position).
+      // This lets the user drag back to the start without falling through to "append".
+      snapRects = [
+        { r: placeholder.getBoundingClientRect() },          // original slot
+        ...liveCards().map(c => ({ r: c.getBoundingClientRect() })), // other cards
+      ];
+      lastIdx = -1;
 
       ghost = card.cloneNode(true);
       ghost.style.cssText = [
@@ -7470,28 +7473,27 @@ class EnergyDashboardCard extends HTMLElement {
       e.preventDefault();
       didDrag = true;
 
-      const gLeft = e.clientX - offsetX;
-      const gTop  = e.clientY - offsetY;
-      ghost.style.left = gLeft + 'px';
-      ghost.style.top  = gTop  + 'px';
+      ghost.style.left = (e.clientX - offsetX) + 'px';
+      ghost.style.top  = (e.clientY - offsetY) + 'px';
 
-      // Ghost centre determines the target slot.
-      const gcx = gLeft + ghost.offsetWidth  / 2;
-      const gcy = gTop  + ghost.offsetHeight / 2;
-
-      // Hit-test against the FROZEN snapshot — immune to layout reflow.
-      let newIdx = snapRects.length; // default: append at end
+      // Use POINTER position (not ghost centre) so the target slot tracks
+      // exactly where the finger is, regardless of how the card was grabbed.
+      // Find the nearest slot centre in the frozen snapshot (immune to reflow).
+      let newIdx = 0, bestD = Infinity;
       for (let i = 0; i < snapRects.length; i++) {
         const { r } = snapRects[i];
-        if (gcx >= r.left && gcx <= r.right && gcy >= r.top && gcy <= r.bottom) {
-          newIdx = gcy < r.top + r.height / 2 ? i : i + 1;
-          break;
-        }
+        const d = Math.hypot(e.clientX - (r.left + r.width / 2),
+                             e.clientY - (r.top  + r.height / 2));
+        if (d < bestD) { bestD = d; newIdx = i; }
       }
 
       if (newIdx === lastIdx) return;
       lastIdx = newIdx;
 
+      // snapRects[0] = original slot → insert before liveCards()[0]
+      // snapRects[i] → insert before liveCards()[i] (which is liveCards[i-1+1])
+      // When newIdx === snapRects.length-1 for last card, liveCards()[newIdx] may be
+      // undefined → insertBefore(placeholder, null) === appendChild ✓
       const cards = liveCards();
       container.insertBefore(placeholder, cards[newIdx] ?? null);
     }, { passive: false });
