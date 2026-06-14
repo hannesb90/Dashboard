@@ -7387,6 +7387,7 @@ class EnergyDashboardCard extends HTMLElement {
     let downX = 0, downY = 0;
     let didDrag = false;
     let lastTarget = null;
+    let lastMoveTime = 0;
     let docMoveH = null, docUpH = null;
 
     const otherCards = () => [...container.querySelectorAll('.card')].filter(c => c !== dragCard);
@@ -7459,17 +7460,20 @@ class EnergyDashboardCard extends HTMLElement {
 
         if (!target || target === lastTarget) return;
 
-        const r = target.getBoundingClientRect();
-        const ratio = (ev.clientY - r.top) / r.height;
+        // Throttle: allow at most one swap per 200 ms to prevent oscillation
+        // when layout reflow moves a card back under the pointer.
+        const now = Date.now();
+        if (now - lastMoveTime < 200) return;
+        lastMoveTime = now;
 
-        // Dead zone in the middle 40% of each card prevents oscillation when
-        // layout reflow after a move shifts the card centre under the pointer.
-        if (ratio > 0.3 && ratio < 0.7) return;
-
-        if (ratio <= 0.3) {
-          container.insertBefore(dragCard, target);
-        } else {
+        // DOM-order comparison: drag forward → insert after target,
+        // drag backward → insert before target. Works for both horizontal
+        // and vertical movement without any Y-axis dead zone.
+        const allC = [...container.querySelectorAll('.card')];
+        if (allC.indexOf(dragCard) < allC.indexOf(target)) {
           target.after(dragCard);
+        } else {
+          target.before(dragCard);
         }
         lastTarget = target;
       };
