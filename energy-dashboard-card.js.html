@@ -1061,6 +1061,75 @@ const SHARED_CSS = `
     opacity: 0;
   }
 
+  /* ── Lägg till kort ──────────────────────────────────── */
+  #home-add-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin: 10px 14px 0; padding: 13px 16px; border-radius: 14px;
+    border: 1.5px dashed rgba(255,255,255,0.11);
+    color: rgba(255,249,240,0.38); font-size: 13px; font-weight: 600;
+    cursor: pointer; letter-spacing: 0.1px;
+  }
+  #home-add-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+  /* Bottom panel */
+  .acp-overlay {
+    position: fixed; inset: 0; z-index: 9998;
+    background: rgba(0,0,0,0); pointer-events: none; transition: background 0.3s;
+  }
+  .acp-overlay.open { background: rgba(0,0,0,0.55); pointer-events: all; }
+  .acp-panel {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
+    background: #0D170B; border-radius: 20px 20px 0 0;
+    padding: 0 0 calc(env(safe-area-inset-bottom,0px) + 12px);
+    max-height: 86vh; display: flex; flex-direction: column;
+    transform: translateY(105%); transition: transform 0.35s cubic-bezier(0.32,0.72,0,1);
+  }
+  .acp-panel.open { transform: translateY(0); }
+  .acp-handle { width: 36px; height: 4px; background: rgba(255,255,255,0.14); border-radius: 2px; margin: 12px auto 0; flex-shrink: 0; }
+  .acp-head   { font-size: 16px; font-weight: 700; padding: 12px 18px 10px; flex-shrink: 0; }
+  .acp-search {
+    margin: 0 14px 8px; padding: 10px 14px; width: calc(100% - 28px);
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px; color: #FFF9F0; font-size: 15px; outline: none; -webkit-appearance: none;
+  }
+  .acp-search::placeholder { color: rgba(255,249,240,0.28); }
+  .acp-list { overflow-y: auto; flex: 1; padding: 0 14px; -webkit-overflow-scrolling: touch; }
+  .acp-row  { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; }
+  .acp-row:last-child { border-bottom: none; }
+  .acp-row-info { flex: 1; min-width: 0; }
+  .acp-row-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .acp-row-id   { font-size: 10px; color: rgba(255,249,240,0.3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .acp-row-val  { font-size: 13px; font-weight: 700; color: rgba(255,249,240,0.7); flex-shrink: 0; }
+  .acp-s2 { padding: 0 14px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+  .acp-field label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: rgba(255,249,240,0.38); margin-bottom: 5px; }
+  .acp-field input {
+    width: 100%; padding: 11px 14px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px; color: #FFF9F0; font-size: 16px; outline: none; -webkit-appearance: none;
+  }
+  .acp-field input:focus { border-color: #4A6241; box-shadow: 0 0 0 2px rgba(74,98,65,0.25); }
+  .acp-preview {
+    background: var(--bg2); border-radius: 14px; aspect-ratio: 1/1; max-width: 100px;
+    margin: 0 auto; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px; padding: 10px;
+  }
+  .acp-pval  { font-size: 22px; font-weight: 800; line-height: 1; }
+  .acp-punit { font-size: 11px; color: rgba(255,249,240,0.45); }
+  .acp-plbl  { font-size: 10px; font-weight: 650; color: rgba(226,215,196,0.7); margin-top: 2px; text-align: center; }
+  .acp-save {
+    margin: 0 14px; padding: 14px; border: none; border-radius: 12px;
+    background: #4A6241; color: #FFF9F0; font-size: 15px; font-weight: 700;
+    cursor: pointer; flex-shrink: 0; width: calc(100% - 28px);
+  }
+  .acp-back { text-align: center; padding: 10px 14px; font-size: 13px; color: rgba(255,249,240,0.38); cursor: pointer; flex-shrink: 0; }
+  /* Delete badge on custom cards (visible during drag-active) */
+  .card-del {
+    position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(192,80,60,0.9); color: #fff; font-size: 12px; line-height: 18px;
+    text-align: center; cursor: pointer; display: none; z-index: 10; font-weight: 700;
+  }
+  .cards.drag-active [data-custom] .card-del { display: block; }
+
 `;
 
 // Shared SVG shortcuts
@@ -1266,6 +1335,7 @@ class EnergyDashboardCard extends HTMLElement {
     try {
       this._config = { ...EnergyDashboardCard.getStubConfig(), ...config };
       this._buildShell();
+      this._renderCustomCards();
       this._initCardDrag();
       this._updateValues();
     } catch(e) {
@@ -1761,6 +1831,11 @@ class EnergyDashboardCard extends HTMLElement {
           </div>
         </div>
 <div class="nav-spacer"></div>
+      </div>
+
+      <div id="home-add-btn" onclick="this.getRootNode().host._showAddCardPanel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Lägg till kort
       </div>
     </div>
 
@@ -3000,6 +3075,7 @@ class EnergyDashboardCard extends HTMLElement {
     // Set initial house image immediately
     const h = this._simHour !== undefined ? this._simHour : new Date().getHours();
     this._updateHouseImage(h >= 6 && h < 20);
+    this._updateCustomCards();
     // Init climate slider gradients after layout
     requestAnimationFrame(() => requestAnimationFrame(() => {
       this._refreshClimateSliders();
@@ -7070,6 +7146,211 @@ class EnergyDashboardCard extends HTMLElement {
         cursor += w;
       });
     }
+  }
+
+  // ── Custom cards ─────────────────────────────────────────────
+
+  _loadCustomCards() {
+    try { return JSON.parse(localStorage.getItem('ha_custom_cards') || '[]'); }
+    catch { return []; }
+  }
+
+  _saveCustomCards(cards) {
+    localStorage.setItem('ha_custom_cards', JSON.stringify(cards));
+  }
+
+  _customCardIcon(unit) {
+    if (['W','kW'].includes(unit))     return 'bolt';
+    if (unit === '%')                   return 'battery';
+    if (unit?.includes('°'))           return 'thermo';
+    if (['kWh','Wh'].includes(unit))   return 'energy';
+    if (unit?.includes('kr'))          return 'money';
+    return 'bolt';
+  }
+
+  _fmtCustomVal(state, unit) {
+    const n = parseFloat(state);
+    if (isNaN(n)) return state ?? '--';
+    if (['W','kW'].includes(unit) && Math.abs(n) >= 1000) return (n / 1000).toFixed(1);
+    if (['kWh','Wh'].includes(unit)) return n.toFixed(1);
+    if (unit === '%') return Math.round(n);
+    if (unit?.includes('°')) return n.toFixed(1);
+    return n % 1 === 0 ? String(Math.round(n)) : n.toFixed(1);
+  }
+
+  _fmtCustomUnit(state, unit) {
+    const n = parseFloat(state);
+    if (['W','kW'].includes(unit) && !isNaN(n) && Math.abs(n) >= 1000) return 'kW';
+    return unit || '';
+  }
+
+  _buildCustomCardHtml(cfg) {
+    const icon = ICONS[cfg.icon] || ICONS.bolt;
+    const showBar = cfg.unit === '%';
+    return `<div class="card" id="${cfg.id}" data-custom="${cfg.id}"
+        onclick="event.stopPropagation()">
+      <div class="card-del" onclick="event.stopPropagation();this.getRootNode().host._removeCustomCard('${cfg.id}')">×</div>
+      <div class="card-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="rgba(226,215,196,0.55)" stroke-width="2">${icon}</svg></div>
+      <div class="card-mid">
+        <div class="card-val"><span id="${cfg.id}-val">--</span><span class="unit" id="${cfg.id}-unit">${cfg.unit || ''}</span></div>
+        ${showBar ? `<div class="ev-bar"><div class="ev-fill" id="${cfg.id}-bar" style="width:0%"></div></div>` : ''}
+        <div class="card-lbl">${cfg.label}</div>
+      </div>
+    </div>`;
+  }
+
+  _renderCustomCards() {
+    const container = this.shadowRoot?.querySelector('.cards');
+    if (!container) return;
+    container.querySelectorAll('[data-custom]').forEach(el => el.remove());
+    this._loadCustomCards().forEach(cfg => {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = this._buildCustomCardHtml(cfg);
+      container.appendChild(wrap.firstElementChild);
+    });
+  }
+
+  _updateCustomCards() {
+    const states = this._hass?.states || {};
+    this._loadCustomCards().forEach(cfg => {
+      const st = states[cfg.entity];
+      if (!st) return;
+      const valEl  = this.shadowRoot.getElementById(`${cfg.id}-val`);
+      const unitEl = this.shadowRoot.getElementById(`${cfg.id}-unit`);
+      const barEl  = this.shadowRoot.getElementById(`${cfg.id}-bar`);
+      if (valEl)  valEl.textContent  = this._fmtCustomVal(st.state, cfg.unit);
+      if (unitEl) unitEl.textContent = this._fmtCustomUnit(st.state, cfg.unit);
+      if (barEl)  barEl.style.width  = Math.min(100, Math.max(0, parseFloat(st.state) || 0)) + '%';
+    });
+  }
+
+  _removeCustomCard(id) {
+    const cards = this._loadCustomCards().filter(c => c.id !== id);
+    this._saveCustomCards(cards);
+    const order = JSON.parse(localStorage.getItem('ha_card_order') || '[]').filter(i => i !== id);
+    localStorage.setItem('ha_card_order', JSON.stringify(order));
+    this.shadowRoot.getElementById(id)?.remove();
+  }
+
+  _showAddCardPanel() {
+    const root = this.shadowRoot;
+    root.querySelector('.acp-overlay')?.remove();
+    root.querySelector('.acp-panel')?.remove();
+
+    const states = this._hass?.states || {};
+    const entities = Object.entries(states)
+      .filter(([, s]) => s.attributes?.unit_of_measurement != null || s.entity_id?.startsWith('sensor.'))
+      .map(([id, s]) => ({
+        id,
+        name: s.attributes?.friendly_name || id,
+        state: s.state,
+        unit: s.attributes?.unit_of_measurement ?? '',
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'sv'));
+
+    const overlay = document.createElement('div');
+    overlay.className = 'acp-overlay';
+
+    const panel = document.createElement('div');
+    panel.className = 'acp-panel';
+
+    const close = () => {
+      overlay.classList.remove('open');
+      panel.classList.remove('open');
+      setTimeout(() => { overlay.remove(); panel.remove(); }, 380);
+    };
+    overlay.onclick = close;
+    panel.onclick = e => e.stopPropagation();
+
+    const showStep1 = () => {
+      panel.innerHTML = `
+        <div class="acp-handle"></div>
+        <div class="acp-head">Lägg till kort</div>
+        <input class="acp-search" id="acp-q" type="search" placeholder="Sök enhet eller entitet…" autocorrect="off" autocapitalize="none">
+        <div class="acp-list" id="acp-list"></div>
+      `;
+      const listEl = panel.querySelector('#acp-list');
+      const searchEl = panel.querySelector('#acp-q');
+
+      const render = (q = '') => {
+        const lq = q.toLowerCase();
+        const hits = entities.filter(e =>
+          !lq || e.name.toLowerCase().includes(lq) || e.id.toLowerCase().includes(lq)
+        ).slice(0, 100);
+        listEl.innerHTML = hits.map(e => `
+          <div class="acp-row" data-id="${e.id}">
+            <div class="acp-row-info">
+              <div class="acp-row-name">${e.name}</div>
+              <div class="acp-row-id">${e.id}</div>
+            </div>
+            <div class="acp-row-val">${e.state}${e.unit ? ' ' + e.unit : ''}</div>
+          </div>
+        `).join('');
+        listEl.querySelectorAll('.acp-row').forEach(row => {
+          row.addEventListener('click', () => {
+            const e = entities.find(x => x.id === row.dataset.id);
+            if (e) showStep2(e);
+          });
+        });
+      };
+
+      searchEl.addEventListener('input', () => render(searchEl.value));
+      render();
+      setTimeout(() => searchEl.focus(), 100);
+    };
+
+    const showStep2 = (entity) => {
+      const icon = this._customCardIcon(entity.unit);
+      const prevVal  = this._fmtCustomVal(entity.state, entity.unit);
+      const prevUnit = this._fmtCustomUnit(entity.state, entity.unit);
+
+      panel.innerHTML = `
+        <div class="acp-handle"></div>
+        <div class="acp-head">Konfigurera kort</div>
+        <div class="acp-s2">
+          <div class="acp-preview">
+            <div class="acp-pval">${prevVal}</div>
+            <div class="acp-punit">${prevUnit}</div>
+            <div class="acp-plbl" id="acp-plbl">${entity.name}</div>
+          </div>
+          <div class="acp-field">
+            <label>Etikett</label>
+            <input id="acp-lbl" type="text" value="${entity.name}" autocorrect="off">
+          </div>
+        </div>
+        <div style="flex:1"></div>
+        <button class="acp-save" id="acp-save">Lägg till</button>
+        <div class="acp-back" id="acp-back">← Tillbaka</div>
+      `;
+
+      panel.querySelector('#acp-lbl').addEventListener('input', e => {
+        panel.querySelector('#acp-plbl').textContent = e.target.value || entity.name;
+      });
+      panel.querySelector('#acp-back').addEventListener('click', showStep1);
+      panel.querySelector('#acp-save').addEventListener('click', () => {
+        const label = panel.querySelector('#acp-lbl').value.trim() || entity.name;
+        const cfg = {
+          id: 'custom-' + Math.random().toString(36).slice(2, 9),
+          entity: entity.id,
+          label,
+          unit: entity.unit,
+          icon,
+        };
+        const cards = this._loadCustomCards();
+        cards.push(cfg);
+        this._saveCustomCards(cards);
+        const wrap = document.createElement('div');
+        wrap.innerHTML = this._buildCustomCardHtml(cfg);
+        this.shadowRoot.querySelector('.cards').appendChild(wrap.firstElementChild);
+        this._updateCustomCards();
+        close();
+      });
+    };
+
+    root.appendChild(overlay);
+    root.appendChild(panel);
+    requestAnimationFrame(() => { overlay.classList.add('open'); panel.classList.add('open'); });
+    showStep1();
   }
 
   // ── Card drag-and-drop ────────────────────────────────────────
