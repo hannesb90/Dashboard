@@ -1,4 +1,4 @@
-const CACHE = 'energy-pwa-v13';
+const CACHE = 'energy-pwa-v14';
 
 const MUST_CACHE = [
   './',

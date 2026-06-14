@@ -7395,7 +7395,6 @@ class EnergyDashboardCard extends HTMLElement {
       if (!dragCard) return;
       dragCard.style.visibility = '';
       ghost?.remove();
-      container.style.touchAction = '';
       container.classList.remove('drag-active');
       if (docMoveH) {
         document.removeEventListener('pointermove', docMoveH);
@@ -7434,12 +7433,13 @@ class EnergyDashboardCard extends HTMLElement {
         'overflow:hidden', 'transition:none',
       ].join(';');
       root.appendChild(ghost);
-      container.style.touchAction = 'none';
       container.classList.add('drag-active');
 
-      // Document-level listeners: events arrive regardless of what element is
-      // under the pointer, bypassing the setPointerCapture-from-setTimeout
-      // limitation where mobile browsers silently reject the call.
+      // Track how far the pointer has moved since drag started, so we don't
+      // swap immediately on the first tiny movement after the long-press fires.
+      const startX = e.clientX, startY = e.clientY;
+      let movedEnough = false;
+
       docMoveH = (ev) => {
         ev.preventDefault();
         didDrag = true;
@@ -7447,21 +7447,25 @@ class EnergyDashboardCard extends HTMLElement {
         ghost.style.left = (ev.clientX - offsetX) + 'px';
         ghost.style.top  = (ev.clientY - offsetY) + 'px';
 
-        // Find the card (excluding dragCard) whose rect contains the pointer
-        let target = null;
+        if (!movedEnough) {
+          if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 15) return;
+          movedEnough = true;
+        }
+
+        // Closest card by center distance (excludes hidden dragCard).
+        // Unlike bounding-rect containment, this has no dead zone — the hidden
+        // card's slot doesn't block reaching the card in slot 1 (or any slot).
+        let target = null, minDist = Infinity;
         for (const c of otherCards()) {
           const r = c.getBoundingClientRect();
-          if (ev.clientX >= r.left && ev.clientX <= r.right &&
-              ev.clientY >= r.top  && ev.clientY <= r.bottom) {
-            target = c; break;
-          }
+          const cx = (r.left + r.right) / 2;
+          const cy = (r.top  + r.bottom) / 2;
+          const d  = Math.hypot(ev.clientX - cx, ev.clientY - cy);
+          if (d < minDist) { minDist = d; target = c; }
         }
 
         if (!target || target === lastTarget) return;
 
-        // DOM-order comparison: drag forward → insert after target,
-        // drag backward → insert before target. Works for both horizontal
-        // and vertical movement without any Y-axis dead zone.
         const allC = [...container.querySelectorAll('.card')];
         if (allC.indexOf(dragCard) < allC.indexOf(target)) {
           target.after(dragCard);
