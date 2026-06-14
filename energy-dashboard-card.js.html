@@ -264,7 +264,7 @@ const SHARED_CSS = `
   .hours { display: flex; justify-content: space-between; font-size: clamp(9.5px, 2.3vw, 11.6px); color: rgba(226,215,196,0.45); margin-top: 5px; }
 
   /* Cards */
-  .cards { display: grid; grid-template-columns: repeat(3,1fr); gap: clamp(5.2px, 1.6%, 10.5px); padding: 0 14px clamp(6.3px, 1.6%, 10.5px); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+  .cards { display: grid; grid-template-columns: repeat(3,1fr); gap: clamp(5.2px, 1.6%, 10.5px); padding: 0 14px clamp(6.3px, 1.6%, 10.5px); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .cards { grid-auto-rows: auto; }
   /* Drag-and-drop states */
   .card { transition: opacity 0.15s; }
@@ -7427,7 +7427,7 @@ class EnergyDashboardCard extends HTMLElement {
     let downX = 0, downY = 0;
     let didDrag = false;
     let lastTarget = null;
-    let docMoveH = null, docUpH = null;
+    let docMoveH = null, docTouchH = null, docUpH = null;
 
     const otherCards = () => [...container.querySelectorAll('.card')].filter(c => c !== dragCard);
 
@@ -7436,11 +7436,14 @@ class EnergyDashboardCard extends HTMLElement {
       dragCard.style.visibility = '';
       ghost?.remove();
       container.classList.remove('drag-active');
-      if (docMoveH) {
+      if (docUpH) {
+        document.removeEventListener('touchmove',   docTouchH);
+        document.removeEventListener('touchend',    docUpH);
+        document.removeEventListener('touchcancel', docUpH);
         document.removeEventListener('pointermove', docMoveH);
         document.removeEventListener('pointerup',   docUpH);
         document.removeEventListener('pointercancel', docUpH);
-        docMoveH = null; docUpH = null;
+        docMoveH = null; docTouchH = null; docUpH = null;
       }
       if (didDrag) {
         this._saveCardOrder(container);
@@ -7456,8 +7459,6 @@ class EnergyDashboardCard extends HTMLElement {
       card.style.transform = '';
       card.style.transition = '';
       const rect = card.getBoundingClientRect();
-      // Anchor ghost to where the user originally pressed (downX/Y), not where
-      // the pointer is now — prevents the ghost jumping on drag-start.
       offsetX = downX - rect.left;
       offsetY = downY - rect.top;
 
@@ -7477,28 +7478,22 @@ class EnergyDashboardCard extends HTMLElement {
       root.appendChild(ghost);
       container.classList.add('drag-active');
 
-      docMoveH = (ev) => {
-        ev.preventDefault();
+      // Shared hit-detection logic used by both touch and pointer handlers.
+      const handleMove = (clientX, clientY) => {
         didDrag = true;
+        ghost.style.left = (clientX - offsetX) + 'px';
+        ghost.style.top  = (clientY - offsetY) + 'px';
 
-        ghost.style.left = (ev.clientX - offsetX) + 'px';
-        ghost.style.top  = (ev.clientY - offsetY) + 'px';
-
-        // Expanded bounding-rect: each card's hit zone grows 6 px beyond its
-        // visual edge, covering the inter-card gap and the hidden card's dead
-        // zone so slot 1 and other edge slots remain reachable.
         const HIT = 6;
         let target = null;
         for (const c of otherCards()) {
           const r = c.getBoundingClientRect();
-          if (ev.clientX >= r.left - HIT && ev.clientX <= r.right  + HIT &&
-              ev.clientY >= r.top  - HIT && ev.clientY <= r.bottom + HIT) {
+          if (clientX >= r.left - HIT && clientX <= r.right  + HIT &&
+              clientY >= r.top  - HIT && clientY <= r.bottom + HIT) {
             target = c; break;
           }
         }
-
         if (!target || target === lastTarget) return;
-
         const allC = [...container.querySelectorAll('.card')];
         if (allC.indexOf(dragCard) < allC.indexOf(target)) {
           target.after(dragCard);
@@ -7508,7 +7503,26 @@ class EnergyDashboardCard extends HTMLElement {
         lastTarget = target;
       };
 
+      // Touch handler: preventDefault stops iOS from treating this as a scroll
+      // or horizontal page-swipe. Must be non-passive to call preventDefault.
+      docTouchH = (ev) => {
+        ev.preventDefault();
+        const t = ev.touches[0] || ev.changedTouches[0];
+        if (t) handleMove(t.clientX, t.clientY);
+      };
+
+      // Pointer handler: for mouse/stylus (skip touch-sourced events handled above).
+      docMoveH = (ev) => {
+        if (ev.pointerType === 'touch') return;
+        ev.preventDefault();
+        handleMove(ev.clientX, ev.clientY);
+      };
+
       docUpH = () => endDrag();
+
+      document.addEventListener('touchmove',   docTouchH, { passive: false });
+      document.addEventListener('touchend',    docUpH);
+      document.addEventListener('touchcancel', docUpH);
       document.addEventListener('pointermove', docMoveH, { passive: false });
       document.addEventListener('pointerup',   docUpH);
       document.addEventListener('pointercancel', docUpH);
@@ -7522,15 +7536,34 @@ class EnergyDashboardCard extends HTMLElement {
       longPressTimer = setTimeout(() => {
         longPressTimer = null;
         longPressCard = card;
-        // Visual "ready" feedback: slight scale-up
         card.style.transition = 'transform 0.12s';
         card.style.transform  = 'scale(1.05)';
       }, 420);
     });
 
+    // Container touchmove: detects drag-start from ready state (touch devices).
+    // Non-passive so we can call preventDefault when a drag begins, preventing
+    // the browser from treating the first move as a page-swipe.
+    container.addEventListener('touchmove', (ev) => {
+      const t = ev.touches[0]; if (!t) return;
+      if (longPressCard) {
+        if (Math.hypot(t.clientX - downX, t.clientY - downY) > 8) {
+          const card = longPressCard;
+          longPressCard = null;
+          ev.preventDefault();
+          beginDrag(card);
+        }
+        return;
+      }
+      if (!longPressTimer) return;
+      if (Math.abs(t.clientX - downX) > 15 || Math.abs(t.clientY - downY) > 15) {
+        clearTimeout(longPressTimer); longPressTimer = null;
+      }
+    }, { passive: false });
+
+    // Container pointermove: same logic for mouse/stylus.
     container.addEventListener('pointermove', (e) => {
       if (longPressCard) {
-        // Already in ready state — a deliberate move starts the drag
         if (Math.hypot(e.clientX - downX, e.clientY - downY) > 8) {
           const card = longPressCard;
           longPressCard = null;
@@ -7546,7 +7579,6 @@ class EnergyDashboardCard extends HTMLElement {
 
     container.addEventListener('pointerup', () => {
       if (longPressCard) {
-        // Held and released without dragging → show options
         const card = longPressCard;
         longPressCard = null;
         card.style.transform = '';
