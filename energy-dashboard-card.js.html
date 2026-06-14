@@ -6862,9 +6862,10 @@ class EnergyDashboardCard extends HTMLElement {
     if (img.dataset.bg !== src) {
       img.dataset.bg = src;
       img.style.visibility = 'hidden';
-      img.src = actualSrc;
       img.onload = function(){ img.style.visibility='visible'; img.style.display='block'; };
-      img.onerror = function(){ img.style.visibility='hidden'; };
+      // Clear dataset.bg on failure so the next state update retries the load.
+      img.onerror = function(){ img.style.visibility='hidden'; delete img.dataset.bg; };
+      img.src = actualSrc;
     }
   }
 
