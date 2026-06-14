@@ -2791,9 +2791,8 @@ class EnergyDashboardCard extends HTMLElement {
     const pagesEl = this.shadowRoot.querySelector('.pages');
     if (pagesEl) pagesEl.scrollTop = 0;
     if (page === 'media') {
-      const st = this._state(this._config?.media_entity);
-      this._updateMAQueue(st);
       this._maLoadPlaylists();
+      if (this._spotifyToken) this._spotifyUpdateQueue();
     }
   }
 
@@ -3117,7 +3116,6 @@ class EnergyDashboardCard extends HTMLElement {
     if (this._activePeriod === 'idag') {
       this._updateEnergyMix();
     }
-    this._updateMedia();
     this._updateFlows();
     this._updateLights();
     this._updateLockStatus();
