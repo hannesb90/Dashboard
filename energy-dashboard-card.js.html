@@ -7411,11 +7411,13 @@ class EnergyDashboardCard extends HTMLElement {
       offsetX = e.clientX - rect.left;
       offsetY = e.clientY - rect.top;
 
-      // Invisible placeholder keeps the grid slot occupied
+      // Placeholder occupies the original slot; card is detached so the grid
+      // has no extra invisible cell — allows dragging into genuinely empty areas.
       placeholder = document.createElement('div');
       placeholder.className = card.className;
       placeholder.style.cssText = 'opacity:0;pointer-events:none';
       container.insertBefore(placeholder, card);
+      card.remove();
 
       // Floating ghost follows the finger
       ghost = card.cloneNode(true);
@@ -7436,8 +7438,6 @@ class EnergyDashboardCard extends HTMLElement {
         `overflow:hidden`,
       ].join(';');
       root.appendChild(ghost);
-
-      card.style.cssText = 'opacity:0;pointer-events:none';
       container.style.touchAction = 'none';
       container.classList.add('drag-active');
       container.setPointerCapture(e.pointerId);
