@@ -1130,6 +1130,40 @@ const SHARED_CSS = `
   }
   .cards.drag-active [data-custom] .card-del { display: block; }
 
+  /* ── Restore hidden cards button ───────────────────────── */
+  #home-restore-btn {
+    display: none; align-items: center; justify-content: center; gap: 8px;
+    margin: 6px 14px 0; padding: 11px 16px; border-radius: 14px;
+    border: 1.5px solid rgba(255,255,255,0.07);
+    color: rgba(255,249,240,0.28); font-size: 12px; font-weight: 600;
+    cursor: pointer; letter-spacing: 0.1px;
+  }
+  #home-restore-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* ── Card options bottom sheet ──────────────────────────── */
+  .card-opts-overlay {
+    position: fixed; inset: 0; z-index: 9998; background: rgba(0,0,0,0.55);
+  }
+  .card-opts {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 9999;
+    background: #0D170B; border-radius: 20px 20px 0 0;
+    padding: 0 0 calc(env(safe-area-inset-bottom,0px) + 6px);
+  }
+  .card-opts-handle { width: 36px; height: 4px; background: rgba(255,255,255,0.14); border-radius: 2px; margin: 12px auto 8px; }
+  .card-opts-title  { font-size: 12px; color: rgba(255,249,240,0.35); text-align: center; padding: 2px 18px 10px; font-weight: 600; }
+  .card-opts-btn {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 20px; font-size: 16px; cursor: pointer;
+    border-top: 1px solid rgba(255,255,255,0.06); color: #FFF9F0;
+  }
+  .card-opts-btn.danger { color: #e07070; }
+  .card-opts-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+  .card-opts-cancel {
+    display: flex; align-items: center; justify-content: center;
+    padding: 15px; font-size: 15px; font-weight: 600; cursor: pointer;
+    color: rgba(255,249,240,0.38); border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
 `;
 
 // Shared SVG shortcuts
@@ -1836,6 +1870,10 @@ class EnergyDashboardCard extends HTMLElement {
       <div id="home-add-btn" onclick="this.getRootNode().host._showAddCardPanel()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Lägg till kort
+      </div>
+      <div id="home-restore-btn" onclick="this.getRootNode().host._showRestorePanel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-3.85"/></svg>
+        Visa dolda kort (<span id="home-restore-count">0</span>)
       </div>
     </div>
 
@@ -7380,10 +7418,12 @@ class EnergyDashboardCard extends HTMLElement {
     if (!container) return;
 
     this._restoreCardOrder(container);
+    this._applyHiddenCards();
 
     let dragCard = null, ghost = null;
     let offsetX = 0, offsetY = 0;
     let longPressTimer = null;
+    let longPressCard = null;   // card waiting in "ready" state after 420 ms
     let downX = 0, downY = 0;
     let didDrag = false;
     let lastTarget = null;
@@ -7409,16 +7449,18 @@ class EnergyDashboardCard extends HTMLElement {
       dragCard = null; ghost = null; lastTarget = null; didDrag = false;
     };
 
-    const beginDrag = (e, card) => {
+    const beginDrag = (card) => {
       dragCard = card;
       didDrag  = false;
       lastTarget = null;
+      card.style.transform = '';
+      card.style.transition = '';
       const rect = card.getBoundingClientRect();
-      offsetX = e.clientX - rect.left;
-      offsetY = e.clientY - rect.top;
+      // Anchor ghost to where the user originally pressed (downX/Y), not where
+      // the pointer is now — prevents the ghost jumping on drag-start.
+      offsetX = downX - rect.left;
+      offsetY = downY - rect.top;
 
-      // Keep card in DOM (visibility:hidden) so its grid slot stays occupied —
-      // no phantom-slot issues and the slot acts as a natural drop-target.
       card.style.visibility = 'hidden';
 
       ghost = card.cloneNode(true);
@@ -7435,11 +7477,6 @@ class EnergyDashboardCard extends HTMLElement {
       root.appendChild(ghost);
       container.classList.add('drag-active');
 
-      // Track how far the pointer has moved since drag started, so we don't
-      // swap immediately on the first tiny movement after the long-press fires.
-      const startX = e.clientX, startY = e.clientY;
-      let movedEnough = false;
-
       docMoveH = (ev) => {
         ev.preventDefault();
         didDrag = true;
@@ -7447,15 +7484,9 @@ class EnergyDashboardCard extends HTMLElement {
         ghost.style.left = (ev.clientX - offsetX) + 'px';
         ghost.style.top  = (ev.clientY - offsetY) + 'px';
 
-        if (!movedEnough) {
-          if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 15) return;
-          movedEnough = true;
-        }
-
         // Expanded bounding-rect: each card's hit zone grows 6 px beyond its
         // visual edge, covering the inter-card gap and the hidden card's dead
-        // zone so slot 1 and other edge slots remain reachable. DOM order
-        // determines priority (first match wins), preventing oscillation.
+        // zone so slot 1 and other edge slots remain reachable.
         const HIT = 6;
         let target = null;
         for (const c of otherCards()) {
@@ -7488,19 +7519,235 @@ class EnergyDashboardCard extends HTMLElement {
       const card = e.target.closest('.card');
       if (!card) return;
       downX = e.clientX; downY = e.clientY;
-      longPressTimer = setTimeout(() => beginDrag(e, card), 420);
+      longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+        longPressCard = card;
+        // Visual "ready" feedback: slight scale-up
+        card.style.transition = 'transform 0.12s';
+        card.style.transform  = 'scale(1.05)';
+      }, 420);
     });
 
     container.addEventListener('pointermove', (e) => {
+      if (longPressCard) {
+        // Already in ready state — a deliberate move starts the drag
+        if (Math.hypot(e.clientX - downX, e.clientY - downY) > 8) {
+          const card = longPressCard;
+          longPressCard = null;
+          beginDrag(card);
+        }
+        return;
+      }
       if (!longPressTimer) return;
       if (Math.abs(e.clientX - downX) > 15 || Math.abs(e.clientY - downY) > 15) {
         clearTimeout(longPressTimer); longPressTimer = null;
       }
     });
 
-    const cancelLong = () => { clearTimeout(longPressTimer); longPressTimer = null; };
-    container.addEventListener('pointerup',     cancelLong);
-    container.addEventListener('pointercancel', cancelLong);
+    container.addEventListener('pointerup', () => {
+      if (longPressCard) {
+        // Held and released without dragging → show options
+        const card = longPressCard;
+        longPressCard = null;
+        card.style.transform = '';
+        card.style.transition = '';
+        this._showCardOptions(card);
+        return;
+      }
+      clearTimeout(longPressTimer); longPressTimer = null;
+    });
+
+    container.addEventListener('pointercancel', () => {
+      if (longPressCard) {
+        longPressCard.style.transform = '';
+        longPressCard.style.transition = '';
+        longPressCard = null;
+      }
+      clearTimeout(longPressTimer); longPressTimer = null;
+    });
+  }
+
+  _applyHiddenCards() {
+    const hidden = JSON.parse(localStorage.getItem('ha_hidden_cards') || '[]');
+    hidden.forEach(id => {
+      const el = this.shadowRoot.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    this._updateRestoreBtn();
+  }
+
+  _updateRestoreBtn() {
+    const hidden = JSON.parse(localStorage.getItem('ha_hidden_cards') || '[]');
+    const btn = this.shadowRoot.getElementById('home-restore-btn');
+    if (btn) btn.style.display = hidden.length ? 'flex' : 'none';
+    const cnt = this.shadowRoot.getElementById('home-restore-count');
+    if (cnt) cnt.textContent = hidden.length;
+  }
+
+  _showCardOptions(card) {
+    const root = this.shadowRoot;
+    const isCustom = !!card.dataset.custom;
+    const cardId   = card.id;
+    const label    = card.querySelector('.card-lbl')?.textContent || cardId;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'card-opts-overlay';
+    const menu = document.createElement('div');
+    menu.className = 'card-opts';
+
+    const close = () => { overlay.remove(); menu.remove(); };
+    overlay.onclick = close;
+    menu.onclick = e => e.stopPropagation();
+
+    const pencilSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+    const trashSvg  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+    const eyeOffSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+    menu.innerHTML = `
+      <div class="card-opts-handle"></div>
+      <div class="card-opts-title">${label}</div>
+      ${isCustom ? `
+        <div class="card-opts-btn" id="opts-rename">${pencilSvg}Byt namn</div>
+        <div class="card-opts-btn danger" id="opts-delete">${trashSvg}Ta bort kort</div>
+      ` : `
+        <div class="card-opts-btn danger" id="opts-hide">${eyeOffSvg}Dölj kort</div>
+      `}
+      <div class="card-opts-cancel" id="opts-cancel">Avbryt</div>
+    `;
+
+    menu.querySelector('#opts-cancel').onclick = close;
+
+    if (isCustom) {
+      menu.querySelector('#opts-rename').onclick = () => { close(); this._showRenameCardPanel(card); };
+      menu.querySelector('#opts-delete').onclick = () => { close(); this._removeCustomCard(cardId); };
+    } else {
+      menu.querySelector('#opts-hide').onclick = () => { close(); this._hideBuiltinCard(cardId); };
+    }
+
+    root.appendChild(overlay);
+    root.appendChild(menu);
+  }
+
+  _hideBuiltinCard(id) {
+    const hidden = JSON.parse(localStorage.getItem('ha_hidden_cards') || '[]');
+    if (!hidden.includes(id)) hidden.push(id);
+    localStorage.setItem('ha_hidden_cards', JSON.stringify(hidden));
+    const el = this.shadowRoot.getElementById(id);
+    if (el) el.style.display = 'none';
+    this._updateRestoreBtn();
+  }
+
+  _showBuiltinCard(id) {
+    const hidden = JSON.parse(localStorage.getItem('ha_hidden_cards') || '[]').filter(i => i !== id);
+    localStorage.setItem('ha_hidden_cards', JSON.stringify(hidden));
+    const el = this.shadowRoot.getElementById(id);
+    if (el) el.style.display = '';
+    this._updateRestoreBtn();
+  }
+
+  _showRestorePanel() {
+    const root   = this.shadowRoot;
+    const hidden = JSON.parse(localStorage.getItem('ha_hidden_cards') || '[]');
+    if (!hidden.length) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'acp-overlay';
+    const panel = document.createElement('div');
+    panel.className = 'acp-panel';
+
+    const close = () => {
+      overlay.classList.remove('open'); panel.classList.remove('open');
+      setTimeout(() => { overlay.remove(); panel.remove(); }, 380);
+    };
+    overlay.onclick = close;
+    panel.onclick = e => e.stopPropagation();
+
+    const rows = hidden.map(id => {
+      const label = root.getElementById(id)?.querySelector('.card-lbl')?.textContent || id;
+      return `<div class="acp-row" data-restore-id="${id}">
+        <div class="acp-row-info"><div class="acp-row-name">${label}</div></div>
+        <div class="acp-row-val" style="color:#4A6241;font-weight:700">Visa</div>
+      </div>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="acp-handle"></div>
+      <div class="acp-head">Dolda kort</div>
+      <div class="acp-list">${rows}</div>
+      <div class="acp-back" id="restore-close">Stäng</div>
+    `;
+
+    panel.querySelector('#restore-close').onclick = close;
+    panel.querySelectorAll('.acp-row').forEach(row => {
+      row.onclick = () => {
+        this._showBuiltinCard(row.dataset.restoreId);
+        row.remove();
+        if (!panel.querySelector('.acp-row')) close();
+      };
+    });
+
+    root.appendChild(overlay);
+    root.appendChild(panel);
+    requestAnimationFrame(() => { overlay.classList.add('open'); panel.classList.add('open'); });
+  }
+
+  _showRenameCardPanel(card) {
+    const cfg = this._loadCustomCards().find(c => c.id === card.id);
+    if (!cfg) return;
+    const root = this.shadowRoot;
+    const st = this._hass?.states?.[cfg.entity];
+
+    const overlay = document.createElement('div');
+    overlay.className = 'acp-overlay';
+    const panel = document.createElement('div');
+    panel.className = 'acp-panel';
+
+    const close = () => {
+      overlay.classList.remove('open'); panel.classList.remove('open');
+      setTimeout(() => { overlay.remove(); panel.remove(); }, 380);
+    };
+    overlay.onclick = close;
+    panel.onclick = e => e.stopPropagation();
+
+    const prevVal  = this._fmtCustomVal(st?.state, cfg.unit);
+    const prevUnit = this._fmtCustomUnit(st?.state, cfg.unit);
+
+    panel.innerHTML = `
+      <div class="acp-handle"></div>
+      <div class="acp-head">Byt namn</div>
+      <div class="acp-s2">
+        <div class="acp-preview">
+          <div class="acp-pval">${prevVal}</div>
+          <div class="acp-punit">${prevUnit}</div>
+          <div class="acp-plbl" id="acp-plbl">${cfg.label}</div>
+        </div>
+        <div class="acp-field">
+          <label>Etikett</label>
+          <input id="acp-lbl" type="text" value="${cfg.label}" autocorrect="off">
+        </div>
+      </div>
+      <div style="flex:1"></div>
+      <button class="acp-save" id="acp-save">Spara</button>
+      <div class="acp-back" id="acp-back">Avbryt</div>
+    `;
+
+    panel.querySelector('#acp-lbl').addEventListener('input', e => {
+      panel.querySelector('#acp-plbl').textContent = e.target.value || cfg.label;
+    });
+    panel.querySelector('#acp-back').addEventListener('click', close);
+    panel.querySelector('#acp-save').addEventListener('click', () => {
+      const newLabel = panel.querySelector('#acp-lbl').value.trim() || cfg.label;
+      const cards = this._loadCustomCards().map(c => c.id === cfg.id ? { ...c, label: newLabel } : c);
+      this._saveCustomCards(cards);
+      const lblEl = card.querySelector('.card-lbl');
+      if (lblEl) lblEl.textContent = newLabel;
+      close();
+    });
+
+    root.appendChild(overlay);
+    root.appendChild(panel);
+    requestAnimationFrame(() => { overlay.classList.add('open'); panel.classList.add('open'); });
+    setTimeout(() => panel.querySelector('#acp-lbl')?.focus(), 400);
   }
 
   _startCast() {
