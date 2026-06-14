@@ -7415,13 +7415,15 @@ class EnergyDashboardCard extends HTMLElement {
         if (card) container.appendChild(card);
       });
     }
-    // Any card not in the saved list (e.g. newly added) goes after the saved ones,
-    // never stranded at slot 1 because all saved cards were re-appended past it.
+    // Any card not in the saved list (e.g. newly added) goes after the saved ones.
     const savedSet = new Set(saved || []);
     allCards.forEach(card => {
       const key = card.id || card.dataset.cardId;
       if (!key || !savedSet.has(key)) container.appendChild(card);
     });
+    // Non-card siblings (e.g. nav-spacer) get displaced to position 0 by the
+    // appendChild loops above. Move them back to the end so they don't occupy slot 1.
+    container.querySelectorAll(':scope > :not(.card)').forEach(el => container.appendChild(el));
   }
 
   _initCardDrag() {
