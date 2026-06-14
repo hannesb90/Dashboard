@@ -7386,10 +7386,23 @@ class EnergyDashboardCard extends HTMLElement {
     const liveCards = () => [...container.querySelectorAll('.card')]
       .filter(c => c !== dragCard && c !== placeholder);
 
-    const findTarget = (x, y) => liveCards().find(c => {
-      const r = c.getBoundingClientRect();
-      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-    });
+    const findTarget = (x, y) => {
+      const cards = liveCards();
+      // Exact hit first
+      const hit = cards.find(c => {
+        const r = c.getBoundingClientRect();
+        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+      });
+      if (hit) return hit;
+      // Fall back to closest card center (handles gaps between rows)
+      let best = null, bestDist = Infinity;
+      for (const c of cards) {
+        const r = c.getBoundingClientRect();
+        const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+        if (d < bestDist) { bestDist = d; best = c; }
+      }
+      return best;
+    };
 
     const beginDrag = (e, card) => {
       dragCard = card;
@@ -7477,7 +7490,9 @@ class EnergyDashboardCard extends HTMLElement {
       const target = findTarget(e.clientX, e.clientY);
       if (target) {
         const r = target.getBoundingClientRect();
-        const insertBefore = e.clientX < r.left + r.width / 2;
+        const midY = r.top + r.height / 2;
+        // Use vertical midpoint for cross-row insertion; horizontal for same row
+        const insertBefore = e.clientY < midY || (e.clientY === midY && e.clientX < r.left + r.width / 2);
         container.insertBefore(placeholder, insertBefore ? target : target.nextSibling);
       }
     }, { passive: false });
