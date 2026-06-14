@@ -5286,7 +5286,7 @@ class EnergyDashboardCard extends HTMLElement {
       if (!teslaImg) {
         const img = document.createElement('img');
         img.id    = 'popup-tesla-img';
-        img.src   = (this._config?.hassUrl || localStorage.getItem('ha_url') || '').replace(/\/$/,'') + '/local/teslan.png';
+        img.src   = './images/teslan.png';
         img.alt   = 'Tesla';
         img.style.cssText = 'width:100%;border-radius:12px;object-fit:contain;display:block;margin-bottom:8px;max-height:160px;background:transparent;';
         chartWrap?.parentNode?.insertBefore(img, chartWrap);
@@ -6564,7 +6564,7 @@ class EnergyDashboardCard extends HTMLElement {
     const popup = this._q('#filip-prank-popup');
     if (!popup) return;
     const img = popup.querySelector('#filip-img');
-    if (img && !img.src) img.src = (this._config?.hassUrl || localStorage.getItem('ha_url') || '').replace(/\/$/,'') + '/local/filip.png';
+    if (img && !img.src) img.src = './images/filip.png';
     popup.style.display = 'flex';
   }
 
@@ -6850,21 +6850,18 @@ class EnergyDashboardCard extends HTMLElement {
     const winter = this._simWinter !== undefined ? this._simWinter : isWinter;
 
     let src;
-    if ( isDay && !winter) src = '/local/Bakgrund.png';
-    if ( isDay &&  winter) src = '/local/Bakgrund_dag_vinter.png';
-    if (!isDay && !winter) src = '/local/natt1.png';
-    if (!isDay &&  winter) src = '/local/snö_natt_1.png';
+    if ( isDay && !winter) src = './images/Bakgrund.png';
+    if ( isDay &&  winter) src = './images/Bakgrund_dag_vinter.png';
+    if (!isDay && !winter) src = './images/natt1.png';
+    if (!isDay &&  winter) src = './images/snö_natt_1.png';
 
-    // Prefix with HA base URL when running as standalone PWA (different origin)
-    const haBase = (this._config?.hassUrl || localStorage.getItem('ha_url') || '').replace(/\/$/, '');
-    const actualSrc = (_PREVIEW_IMAGES && _PREVIEW_IMAGES[src]) || (haBase ? haBase + src : src);
+    const actualSrc = (_PREVIEW_IMAGES && _PREVIEW_IMAGES[src]) || src;
 
     if (img.dataset.bg !== src) {
       img.dataset.bg = src;
       img.style.visibility = 'hidden';
-      console.log('[Hero] Loading image:', actualSrc);
-      img.onload = function(){ img.style.visibility='visible'; img.style.display='block'; console.log('[Hero] Image loaded OK:', actualSrc); };
-      img.onerror = function(e){ img.style.visibility='hidden'; delete img.dataset.bg; console.error('[Hero] Image failed:', actualSrc, e); };
+      img.onload = function(){ img.style.visibility='visible'; img.style.display='block'; };
+      img.onerror = function(){ img.style.visibility='hidden'; delete img.dataset.bg; };
       img.src = actualSrc;
     }
   }

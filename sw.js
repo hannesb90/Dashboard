@@ -1,4 +1,4 @@
-const CACHE = 'energy-pwa-v23';
+const CACHE = 'energy-pwa-v24';
 
 const MUST_CACHE = [
   './',
@@ -8,13 +8,22 @@ const MUST_CACHE = [
   './cast-sender.js',
 ];
 
+const IMAGE_CACHE = [
+  './images/Bakgrund.png',
+  './images/Bakgrund_dag_vinter.png',
+  './images/natt1.png',
+  './images/snö_natt_1.png',
+  './images/teslan.png',
+  './images/filip.png',
+];
+
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
       .then(c => c.addAll(MUST_CACHE))
       .then(() => {
         caches.open(CACHE).then(c =>
-          c.addAll(['./energy-dashboard-card.js.html', './icons/icon.svg', './receiver.html']).catch(() => {})
+          c.addAll(['./energy-dashboard-card.js.html', './icons/icon.svg', './receiver.html', ...IMAGE_CACHE]).catch(() => {})
         );
       })
       .then(() => self.skipWaiting())
