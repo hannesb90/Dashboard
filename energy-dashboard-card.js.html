@@ -6110,7 +6110,7 @@ class EnergyDashboardCard extends HTMLElement {
     }, 500);
     let data;
     try {
-      data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=8&market=from_token`, {}, abort.signal);
+      data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=10`, {}, abort.signal);
     } catch(e) {
       clearTimeout(loadingTimer);
       if (abort.signal.aborted) return;  // newer search already started – discard silently
