@@ -7452,16 +7452,18 @@ class EnergyDashboardCard extends HTMLElement {
           movedEnough = true;
         }
 
-        // Closest card by center distance (excludes hidden dragCard).
-        // Unlike bounding-rect containment, this has no dead zone — the hidden
-        // card's slot doesn't block reaching the card in slot 1 (or any slot).
-        let target = null, minDist = Infinity;
+        // Expanded bounding-rect: each card's hit zone grows 6 px beyond its
+        // visual edge, covering the inter-card gap and the hidden card's dead
+        // zone so slot 1 and other edge slots remain reachable. DOM order
+        // determines priority (first match wins), preventing oscillation.
+        const HIT = 6;
+        let target = null;
         for (const c of otherCards()) {
           const r = c.getBoundingClientRect();
-          const cx = (r.left + r.right) / 2;
-          const cy = (r.top  + r.bottom) / 2;
-          const d  = Math.hypot(ev.clientX - cx, ev.clientY - cy);
-          if (d < minDist) { minDist = d; target = c; }
+          if (ev.clientX >= r.left - HIT && ev.clientX <= r.right  + HIT &&
+              ev.clientY >= r.top  - HIT && ev.clientY <= r.bottom + HIT) {
+            target = c; break;
+          }
         }
 
         if (!target || target === lastTarget) return;
