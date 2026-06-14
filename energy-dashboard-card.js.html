@@ -6127,67 +6127,71 @@ class EnergyDashboardCard extends HTMLElement {
     const items = [];
     let html = '';
 
-    const tracks = (data.tracks?.items || []).filter(t => t.is_playable !== false);
-    if (tracks.length) {
-      html += '<div class="ma-sr-section">Låtar</div>';
-      html += tracks.slice(0, 5).map(t => {
-        const idx = items.push({ uri: t.uri, type: 'track', title: t.name }) - 1;
-        const img = t.album?.images?.[1]?.url || t.album?.images?.[0]?.url || '';
-        const art = (t.artists || []).map(a => a.name).join(', ');
-        return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
-          <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
-          <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(t.name)}</div><div class="ma-sr-sub">${this._escapeHtml(art)}</div></div>
-          <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
-        </div>`;
-      }).join('');
-    }
+    try {
+      const tracks = (data.tracks?.items || []).filter(t => t && t.is_playable !== false);
+      if (tracks.length) {
+        html += '<div class="ma-sr-section">Låtar</div>';
+        html += tracks.slice(0, 5).map(t => {
+          const idx = items.push({ uri: t.uri, type: 'track', title: t.name }) - 1;
+          const img = t.album?.images?.[1]?.url || t.album?.images?.[0]?.url || '';
+          const art = (t.artists || []).filter(Boolean).map(a => a.name).join(', ');
+          return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
+            <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
+            <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(t.name)}</div><div class="ma-sr-sub">${this._escapeHtml(art)}</div></div>
+            <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
+          </div>`;
+        }).join('');
+      }
 
-    const albums = data.albums?.items || [];
-    if (albums.length) {
-      html += '<div class="ma-sr-section">Album</div>';
-      html += albums.slice(0, 3).map(al => {
-        const idx = items.push({ uri: al.uri, type: 'album', title: al.name }) - 1;
-        const img = al.images?.[1]?.url || al.images?.[0]?.url || '';
-        const art = (al.artists || []).map(a => a.name).join(', ');
-        return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
-          <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
-          <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(al.name)}</div><div class="ma-sr-sub">${this._escapeHtml(art)}</div></div>
-          <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
-        </div>`;
-      }).join('');
-    }
+      const artists = (data.artists?.items || []).filter(Boolean);
+      if (artists.length) {
+        html += '<div class="ma-sr-section">Artister</div>';
+        html += artists.slice(0, 3).map(ar => {
+          const idx = items.push({ uri: ar.uri, type: 'artist', title: ar.name }) - 1;
+          const img = ar.images?.[1]?.url || ar.images?.[0]?.url || '';
+          return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
+            <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
+            <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(ar.name)}</div><div class="ma-sr-sub">Artist</div></div>
+            <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
+          </div>`;
+        }).join('');
+      }
 
-    const playlists = data.playlists?.items || [];
-    if (playlists.length) {
-      html += '<div class="ma-sr-section">Spellistor</div>';
-      html += playlists.slice(0, 3).map(pl => {
-        const idx = items.push({ uri: pl.uri, type: 'playlist', title: pl.name }) - 1;
-        const img = pl.images?.[0]?.url || '';
-        const own = pl.owner?.display_name || '';
-        return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
-          <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
-          <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(pl.name)}</div><div class="ma-sr-sub">${this._escapeHtml(own)}</div></div>
-          <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
-        </div>`;
-      }).join('');
-    }
+      const albums = (data.albums?.items || []).filter(Boolean);
+      if (albums.length) {
+        html += '<div class="ma-sr-section">Album</div>';
+        html += albums.slice(0, 3).map(al => {
+          const idx = items.push({ uri: al.uri, type: 'album', title: al.name }) - 1;
+          const img = al.images?.[1]?.url || al.images?.[0]?.url || '';
+          const art = (al.artists || []).filter(Boolean).map(a => a.name).join(', ');
+          return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
+            <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
+            <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(al.name)}</div><div class="ma-sr-sub">${this._escapeHtml(art)}</div></div>
+            <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
+          </div>`;
+        }).join('');
+      }
 
-    const artists = data.artists?.items || [];
-    if (artists.length) {
-      html += '<div class="ma-sr-section">Artister</div>';
-      html += artists.slice(0, 3).map(ar => {
-        const idx = items.push({ uri: ar.uri, type: 'artist', title: ar.name }) - 1;
-        const img = ar.images?.[1]?.url || ar.images?.[0]?.url || '';
-        return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
-          <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
-          <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(ar.name)}</div><div class="ma-sr-sub">Artist</div></div>
-          <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
-        </div>`;
-      }).join('');
-    }
+      const playlists = (data.playlists?.items || []).filter(Boolean);
+      if (playlists.length) {
+        html += '<div class="ma-sr-section">Spellistor</div>';
+        html += playlists.slice(0, 3).map(pl => {
+          const idx = items.push({ uri: pl.uri, type: 'playlist', title: pl.name }) - 1;
+          const img = pl.images?.[0]?.url || '';
+          const own = pl.owner?.display_name || '';
+          return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
+            <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
+            <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(pl.name)}</div><div class="ma-sr-sub">${this._escapeHtml(own)}</div></div>
+            <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
+          </div>`;
+        }).join('');
+      }
 
-    this._spotifySearchItems = items;
-    res.innerHTML = html || '<div class="empty-state">Inga träffar.</div>';
+      this._spotifySearchItems = items;
+      res.innerHTML = html || '<div class="empty-state">Inga träffar.</div>';
+    } catch(renderErr) {
+      res.innerHTML = '<div class="empty-state">Kunde inte visa resultat.</div>';
+    }
   }
 
   async _spotifyPlaySearchResult(index) {
