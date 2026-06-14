@@ -2554,7 +2554,8 @@ class EnergyDashboardCard extends HTMLElement {
 
       <div class="sp-search-panel" id="sp-search-panel">
         <div style="padding:12px 14px 10px">
-          <input id="ma-search-input" type="search" placeholder="Sök låt, artist eller spellista"
+          <input id="ma-search-input" type="text" placeholder="Sök låt, artist eller spellista"
+            autocorrect="off" autocapitalize="none" autocomplete="off" spellcheck="false" inputmode="search"
             style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:12px;background:var(--bg3);color:var(--text);padding:10px 12px;font-size:14px;outline:none"
             oninput="this.getRootNode().host._maSearchDebounce(this.value)">
         </div>
@@ -6104,18 +6105,22 @@ class EnergyDashboardCard extends HTMLElement {
     }
     const abort = new AbortController();
     this._searchAbort = abort;
-    // Only show "Söker…" if there are no results to display yet — otherwise keep old results visible
-    if (!res.querySelector('.ma-sr-item')) {
+    const hasItems = !!res.querySelector('.ma-sr-item');
+    if (hasItems) {
+      res.style.opacity = '0.4';  // dim old results while fetching
+    } else {
       res.innerHTML = '<div class="empty-state">Söker…</div>';
     }
     let data;
     try {
       data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=10`, {}, abort.signal);
     } catch(e) {
-      if (abort.signal.aborted) return;  // newer search already started – discard silently
+      res.style.opacity = '';
+      if (abort.signal.aborted) return;
       res.innerHTML = `<div class="empty-state">Sökning misslyckades: ${this._escapeHtml(e.message)}</div>`;
       return;
     }
+    res.style.opacity = '';
     if (abort.signal.aborted) return;
     if (!data) { res.innerHTML = '<div class="empty-state">Sökning misslyckades – kontrollera att Spotify är ansluten.</div>'; return; }
 
