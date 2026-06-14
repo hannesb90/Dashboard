@@ -5792,11 +5792,22 @@ class EnergyDashboardCard extends HTMLElement {
     // Try stored tokens
     const stored = this._spotifyLoadTokens();
     if (stored) {
-      this._spotifyToken      = stored.access_token;
-      this._spotifyRefreshTok = stored.refresh_token;
+      this._spotifyToken       = stored.access_token;
+      this._spotifyRefreshTok  = stored.refresh_token;
       this._spotifyTokenExpiry = stored.expires_at;
       if (Date.now() > this._spotifyTokenExpiry - 60000) await this._spotifyRefreshToken();
       if (this._spotifyToken) {
+        // Validate token with a real call before showing player
+        try {
+          const me = await this._spotifyFetch('/me');
+          if (!me || !me.id) throw new Error('invalid');
+        } catch {
+          // Token is invalid – force re-auth
+          localStorage.removeItem('spotify_tokens');
+          this._spotifyToken = null;
+          this._spotifyUpdateAuthUI(false);
+          return;
+        }
         this._spotifyStartPolling();
         this._spotifyUpdateAuthUI(true);
         this._maLoadPlaylists();
