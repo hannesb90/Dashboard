@@ -6110,7 +6110,7 @@ class EnergyDashboardCard extends HTMLElement {
     }, 500);
     let data;
     try {
-      data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,artist,playlist&limit=8&market=from_token`, {}, abort.signal);
+      data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=8&market=from_token`, {}, abort.signal);
     } catch(e) {
       clearTimeout(loadingTimer);
       if (abort.signal.aborted) return;  // newer search already started – discard silently
@@ -6124,7 +6124,7 @@ class EnergyDashboardCard extends HTMLElement {
     const items = [];
     let html = '';
 
-    const tracks = data.tracks?.items || [];
+    const tracks = (data.tracks?.items || []).filter(t => t.is_playable !== false);
     if (tracks.length) {
       html += '<div class="ma-sr-section">Låtar</div>';
       html += tracks.slice(0, 5).map(t => {
@@ -6139,10 +6139,25 @@ class EnergyDashboardCard extends HTMLElement {
       }).join('');
     }
 
+    const albums = data.albums?.items || [];
+    if (albums.length) {
+      html += '<div class="ma-sr-section">Album</div>';
+      html += albums.slice(0, 3).map(al => {
+        const idx = items.push({ uri: al.uri, type: 'album', title: al.name }) - 1;
+        const img = al.images?.[1]?.url || al.images?.[0]?.url || '';
+        const art = (al.artists || []).map(a => a.name).join(', ');
+        return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
+          <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
+          <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(al.name)}</div><div class="ma-sr-sub">${this._escapeHtml(art)}</div></div>
+          <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
+        </div>`;
+      }).join('');
+    }
+
     const playlists = data.playlists?.items || [];
     if (playlists.length) {
       html += '<div class="ma-sr-section">Spellistor</div>';
-      html += playlists.slice(0, 4).map(pl => {
+      html += playlists.slice(0, 3).map(pl => {
         const idx = items.push({ uri: pl.uri, type: 'playlist', title: pl.name }) - 1;
         const img = pl.images?.[0]?.url || '';
         const own = pl.owner?.display_name || '';
@@ -6159,7 +6174,7 @@ class EnergyDashboardCard extends HTMLElement {
       html += '<div class="ma-sr-section">Artister</div>';
       html += artists.slice(0, 3).map(ar => {
         const idx = items.push({ uri: ar.uri, type: 'artist', title: ar.name }) - 1;
-        const img = ar.images?.[2]?.url || ar.images?.[0]?.url || '';
+        const img = ar.images?.[1]?.url || ar.images?.[0]?.url || '';
         return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
           <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
           <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(ar.name)}</div><div class="ma-sr-sub">Artist</div></div>
