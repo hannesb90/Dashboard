@@ -2473,6 +2473,17 @@ class EnergyDashboardCard extends HTMLElement {
     <!-- -"-"- MEDIA -"-"- -->
     <div class="page" data-page="media">
 
+      <!-- Spotify auth banner (shown when not authenticated) -->
+      <div id="sp-auth-banner" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:18px;text-align:center">
+        <svg viewBox="0 0 24 24" width="56" height="56" fill="#1DB954"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.65 14.35c-.2.3-.59.4-.9.2-2.45-1.5-5.52-1.84-9.14-1.01-.35.08-.69-.14-.77-.49-.08-.35.14-.69.49-.77 3.96-.91 7.37-.52 10.11 1.17.32.2.41.59.21.9zm1.24-2.76c-.25.38-.75.5-1.13.25-2.8-1.72-7.07-2.22-10.37-1.21-.43.13-.88-.11-1.01-.54-.13-.43.11-.88.54-1.01 3.78-1.15 8.48-.59 11.72 1.38.38.24.51.74.25 1.13zm.11-2.87C14.67 8.82 9.87 8.63 7.03 9.47c-.51.15-1.05-.14-1.2-.65-.15-.51.14-1.05.65-1.2 3.28-.99 8.73-.8 12.17 1.38.46.28.62.88.34 1.35-.27.45-.87.61-1.33.33z"/></svg>
+        <div style="color:var(--text);font-size:17px;font-weight:600">Spotify</div>
+        <div style="color:var(--muted);font-size:13px;line-height:1.5">Logga in för att styra musik<br>och Sonos-högtalare</div>
+        <button onclick="this.getRootNode().host._spotifyStartAuth()"
+          style="background:#1DB954;color:#000;border:none;border-radius:24px;padding:14px 36px;cursor:pointer;font-size:14px;font-weight:700;margin-top:4px;letter-spacing:.3px">
+          Anslut Spotify
+        </button>
+      </div>
+
       <!-- Spotify-style player -->
       <div class="sp-player" id="ma-playing">
 
@@ -2491,7 +2502,7 @@ class EnergyDashboardCard extends HTMLElement {
 
         <!-- Progress -->
         <div class="sp-progress">
-          <div class="sp-bar-wrap">
+          <div class="sp-bar-wrap" onclick="this.getRootNode().host._spotifySeekClick(event,this)" style="cursor:pointer">
             <div class="sp-bar"><div class="sp-fill" id="ma-fill"></div></div>
           </div>
           <div class="sp-times"><span id="ma-pos">0:00</span><span id="ma-dur">--</span></div>
@@ -2766,6 +2777,7 @@ class EnergyDashboardCard extends HTMLElement {
     if (this._timer) clearInterval(this._timer);
     this._timer = setInterval(() => this._tick(), 60000);
     setTimeout(() => this._startFlowOrbs(), 600);
+    setTimeout(() => this._spotifyInit(), 0);
   }
 
   // ----- navigation -----------------------------------------------------------------
@@ -5596,6 +5608,7 @@ class EnergyDashboardCard extends HTMLElement {
     this._hass.callService('media_player', svc, { entity_id: this._config.apple_tv_entity });
   }
   _maCmd(cmd) {
+    if (this._spotifyToken) { this._spotifyCmd(cmd); return; }
     const c  = this._config;
     const id = c.media_entity;
     if (!id || !this._hass) return;
@@ -5636,6 +5649,7 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   _maVolume(val) {
+    if (this._spotifyToken) { this._spotifyVolume(val); return; }
     const id = this._config?.media_entity;
     if (!id || !this._hass) return;
     const pct = Math.max(0, Math.min(100, Number(val) || 0));
@@ -5766,6 +5780,7 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   _updateMedia() {
+    if (this._spotifyToken) return; // Spotify handles UI via polling
     const c    = this._config;
     const st   = this._state(c.media_entity);
     const playing = st?.state === 'playing' || st?.state === 'paused';
@@ -5923,6 +5938,7 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   _maLoadSpeakers() {
+    if (this._spotifyToken) { this._spotifyLoadDevices(); return; }
     const list = this._q('#sp-speakers-list');
     if (!list || !this._hass) return;
     const active = this._config.media_entity;
@@ -6078,6 +6094,7 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   async _maSearch(query) {
+    if (this._spotifyToken) { await this._spotifySearch(query); return; }
     const res = this._q('#ma-search-results');
     const q = String(query ?? '').trim();
     if (!res || q.length < 2) return;
@@ -6178,6 +6195,7 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   async _maLoadPlaylists(force = false) {
+    if (this._spotifyToken) { await this._spotifyLoadPlaylists(force); return; }
     const list = this._q('#ma-playlist-list');
     if (!list || !this._hass) return;
     const now = Date.now();
@@ -6218,6 +6236,474 @@ class EnergyDashboardCard extends HTMLElement {
     if (!item) return;
     this._maPlayUri(item.mediaId, item.mediaType);
   }
+
+  // ═══════════════════════════════════════════════════════════
+  //  SPOTIFY WEB API – Direct integration (bypasses HA / MA)
+  // ═══════════════════════════════════════════════════════════
+
+  get _SPOTIFY_CLIENT_ID() { return 'cce36284f9aa477d9bb0f7b290b0ad4b'; }
+  get _SPOTIFY_REDIRECT()  { return 'https://ha.kottestigenett.se'; }
+  get _SPOTIFY_SCOPES()    {
+    return 'user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative streaming user-read-email user-read-private';
+  }
+
+  async _spotifyInit() {
+    if (this._spotifyInitialized) {
+      // DOM was rebuilt — re-apply current auth state
+      this._spotifyUpdateAuthUI(!!this._spotifyToken);
+      return;
+    }
+    this._spotifyInitialized = true;
+
+    // Handle OAuth callback
+    const params = new URLSearchParams(window.location.search);
+    const code  = params.get('code');
+    const error = params.get('error');
+    if (error) {
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (code) {
+      await this._spotifyHandleCallback(code);
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    // Try stored tokens
+    const stored = this._spotifyLoadTokens();
+    if (stored) {
+      this._spotifyToken      = stored.access_token;
+      this._spotifyRefreshTok = stored.refresh_token;
+      this._spotifyTokenExpiry = stored.expires_at;
+      if (Date.now() > this._spotifyTokenExpiry - 60000) await this._spotifyRefreshToken();
+      if (this._spotifyToken) {
+        this._spotifyStartPolling();
+        this._spotifyUpdateAuthUI(true);
+        this._maLoadPlaylists();
+        return;
+      }
+    }
+
+    // Not authenticated
+    this._spotifyUpdateAuthUI(false);
+  }
+
+  _spotifyLoadTokens() {
+    try {
+      const raw = localStorage.getItem('spotify_tokens');
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      return d.access_token && d.refresh_token ? d : null;
+    } catch { return null; }
+  }
+
+  _spotifySaveTokens(data) {
+    const t = {
+      access_token:  data.access_token,
+      refresh_token: data.refresh_token || this._spotifyRefreshTok,
+      expires_at:    Date.now() + (data.expires_in * 1000),
+    };
+    localStorage.setItem('spotify_tokens', JSON.stringify(t));
+    this._spotifyToken       = t.access_token;
+    this._spotifyRefreshTok  = t.refresh_token;
+    this._spotifyTokenExpiry = t.expires_at;
+  }
+
+  async _spotifyStartAuth() {
+    const verifier  = this._spotifyMakeVerifier();
+    const challenge = await this._spotifyMakeChallenge(verifier);
+    localStorage.setItem('spotify_verifier', verifier);
+    const p = new URLSearchParams({
+      client_id:             this._SPOTIFY_CLIENT_ID,
+      response_type:         'code',
+      redirect_uri:          this._SPOTIFY_REDIRECT,
+      code_challenge_method: 'S256',
+      code_challenge:        challenge,
+      scope:                 this._SPOTIFY_SCOPES,
+    });
+    window.location.href = `https://accounts.spotify.com/authorize?${p}`;
+  }
+
+  _spotifyMakeVerifier() {
+    const a = new Uint8Array(64);
+    crypto.getRandomValues(a);
+    return btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+  }
+
+  async _spotifyMakeChallenge(verifier) {
+    const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+    return btoa(String.fromCharCode(...new Uint8Array(d))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+  }
+
+  async _spotifyHandleCallback(code) {
+    const verifier = localStorage.getItem('spotify_verifier');
+    if (!verifier) return;
+    const resp = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id:     this._SPOTIFY_CLIENT_ID,
+        grant_type:    'authorization_code',
+        code,
+        redirect_uri:  this._SPOTIFY_REDIRECT,
+        code_verifier: verifier,
+      }),
+    });
+    if (!resp.ok) { console.warn('[Spotify] Token exchange failed:', await resp.text()); return; }
+    this._spotifySaveTokens(await resp.json());
+    localStorage.removeItem('spotify_verifier');
+    this._spotifyStartPolling();
+    this._spotifyUpdateAuthUI(true);
+    this._maLoadPlaylists();
+  }
+
+  async _spotifyRefreshToken() {
+    if (!this._spotifyRefreshTok) return;
+    const resp = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id:     this._SPOTIFY_CLIENT_ID,
+        grant_type:    'refresh_token',
+        refresh_token: this._spotifyRefreshTok,
+      }),
+    });
+    if (!resp.ok) {
+      console.warn('[Spotify] Refresh failed – clearing tokens');
+      localStorage.removeItem('spotify_tokens');
+      this._spotifyToken = null;
+      this._spotifyUpdateAuthUI(false);
+      return;
+    }
+    this._spotifySaveTokens(await resp.json());
+  }
+
+  async _spotifyFetch(path, opts = {}) {
+    if (this._spotifyTokenExpiry && Date.now() > this._spotifyTokenExpiry - 30000) {
+      await this._spotifyRefreshToken();
+    }
+    if (!this._spotifyToken) return null;
+    const resp = await fetch(`https://api.spotify.com/v1${path}`, {
+      ...opts,
+      headers: { Authorization: `Bearer ${this._spotifyToken}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    });
+    if (resp.status === 204) return {};
+    if (resp.status === 401) { await this._spotifyRefreshToken(); return null; }
+    if (!resp.ok) { console.warn('[Spotify]', resp.status, path); return null; }
+    try { return await resp.json(); } catch { return {}; }
+  }
+
+  _spotifyStartPolling() {
+    clearInterval(this._spotifyPollTimer);
+    this._spotifyPollPlayback();
+    this._spotifyPollTimer = setInterval(() => this._spotifyPollPlayback(), 5000);
+  }
+
+  async _spotifyPollPlayback() {
+    if (!this._spotifyToken) return;
+    const state = await this._spotifyFetch('/me/player');
+    if (state && state.item) this._spotifyUpdateUI(state);
+  }
+
+  _spotifyUpdateUI(state) {
+    if (!state || !state.item) return;
+    const track     = state.item;
+    const isPlaying = state.is_playing;
+    const vol       = Math.round(state.device?.volume_percent ?? 50);
+    const shuffle   = state.shuffle_state;
+    const repeat    = state.repeat_state;
+    const pos       = Math.round((state.progress_ms ?? 0) / 1000);
+    const dur       = Math.round((track.duration_ms ?? 0) / 1000);
+    const title     = track.name || '';
+    const artists   = (track.artists || []).map(a => a.name).join(', ');
+    const album     = track.album?.name || '';
+    const art       = track.album?.images?.[0]?.url || '';
+
+    this._setTextDirect('#ma-title',  title  || (isPlaying ? '--' : 'Inget spelas'));
+    this._setTextDirect('#ma-artist', artists + (album ? ' · ' + album : ''));
+
+    const mediaKey = [track.id, title, artists].filter(Boolean).join('|');
+    if (mediaKey !== this._lastArtworkMediaKey) {
+      this._lastArtworkMediaKey = mediaKey;
+      this._setMediaArtwork(art);
+    }
+
+    this._mediaProgress = { pos, dur, updated: Date.now(), playing: isPlaying };
+    this._renderMediaProgress();
+    if (!this._mediaProgressTimer) {
+      this._mediaProgressTimer = setInterval(() => this._renderMediaProgress(), 250);
+    }
+
+    this._setMediaPlayIcons(isPlaying);
+
+    const shuffleBtn = this._q('#ma-shuffle');
+    if (shuffleBtn) shuffleBtn.classList.toggle('active', shuffle);
+
+    const repeatBtn = this._q('#ma-repeat');
+    if (repeatBtn) {
+      repeatBtn.classList.toggle('active', repeat !== 'off');
+      repeatBtn.title = repeat === 'track' ? 'Repetera en' : repeat === 'context' ? 'Repetera alla' : 'Repetera';
+    }
+
+    const volSlider = this._q('#ma-vol');
+    if (volSlider && !volSlider._dragging) volSlider.value = vol;
+
+    const hm        = this._q('#h-media-val');
+    const mediaLine = this._formatMediaLine(title, artists);
+    if (title || artists) this._lastMediaTitle = mediaLine;
+    if (hm && (title || artists)) { hm.textContent = mediaLine; hm.style.color = isPlaying ? '#fff' : 'rgba(226,215,196,0.45)'; }
+    this._setMediaPlayIcons(isPlaying);
+
+    const spNameEl = this._q('#sp-speaker-name');
+    if (spNameEl && state.device?.name) spNameEl.textContent = state.device.name;
+
+    this._spotifyState = state;
+
+    if (this._page === 'media') {
+      const now = Date.now();
+      if (!this._lastMAQueueLoad || now - this._lastMAQueueLoad > 10000) {
+        this._lastMAQueueLoad = now;
+        this._spotifyUpdateQueue();
+      }
+    }
+  }
+
+  async _spotifyUpdateQueue() {
+    const data  = await this._spotifyFetch('/me/player/queue');
+    const qList = this._q('#ma-queue-list');
+    const qCount = this._q('#ma-queue-count');
+    const items = data?.queue || [];
+    if (qCount) qCount.textContent = items.length ? items.length + ' låtar' : '';
+    if (!qList) return;
+    if (!items.length) { qList.innerHTML = '<div class="empty-state">Tom kö</div>'; return; }
+    const html = items.slice(0, 15).map((track, i) => {
+      const t = track.name || '--';
+      const a = (track.artists || []).map(x => x.name).join(', ');
+      return `<div class="ma-q-item" onclick="this.getRootNode().host._spotifyPlayTrackUri('${this._escapeAttr(track.uri)}')">
+        <span class="ma-q-num">${i + 1}</span>
+        <div class="ma-q-meta">
+          <div class="ma-q-title">${this._escapeHtml(t)}</div>
+          <div class="ma-q-sub">${this._escapeHtml(a)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    if (qList.innerHTML !== html) qList.innerHTML = html;
+  }
+
+  async _spotifyPlayTrackUri(uri) {
+    await this._spotifyFetch('/me/player/play', { method: 'PUT', body: JSON.stringify({ uris: [uri] }) });
+    setTimeout(() => this._spotifyPollPlayback(), 600);
+  }
+
+  async _spotifyCmd(cmd) {
+    if (cmd === 'play_pause') {
+      const playing = this._spotifyState?.is_playing;
+      const nextPlaying = !playing;
+      this._setMediaPlayIcons(nextPlaying);
+      if (this._mediaProgress) { this._mediaProgress.playing = nextPlaying; this._mediaProgress.updated = Date.now(); }
+      await this._spotifyFetch(playing ? '/me/player/pause' : '/me/player/play', { method: 'PUT' });
+    } else if (cmd === 'next') {
+      this._mediaProgress = { pos: 0, dur: 0, updated: Date.now(), playing: true };
+      this._renderMediaProgress();
+      await this._spotifyFetch('/me/player/next', { method: 'POST' });
+    } else if (cmd === 'prev') {
+      this._mediaProgress = { pos: 0, dur: 0, updated: Date.now(), playing: true };
+      this._renderMediaProgress();
+      await this._spotifyFetch('/me/player/previous', { method: 'POST' });
+    } else if (cmd === 'shuffle') {
+      const cur = this._spotifyState?.shuffle_state ?? false;
+      const btn = this._q('#ma-shuffle');
+      if (btn) btn.classList.toggle('active', !cur);
+      await this._spotifyFetch(`/me/player/shuffle?state=${!cur}`, { method: 'PUT' });
+    } else if (cmd === 'repeat') {
+      const modes = ['off', 'context', 'track'];
+      const cur  = this._spotifyState?.repeat_state ?? 'off';
+      const next = modes[(modes.indexOf(cur) + 1) % modes.length];
+      const btn  = this._q('#ma-repeat');
+      if (btn) btn.classList.toggle('active', next !== 'off');
+      await this._spotifyFetch(`/me/player/repeat?state=${next}`, { method: 'PUT' });
+    }
+    setTimeout(() => this._spotifyPollPlayback(), 700);
+  }
+
+  _spotifyVolume(val) {
+    const pct = Math.max(0, Math.min(100, Number(val) || 0));
+    clearTimeout(this._spotifyVolTimer);
+    this._spotifyVolTimer = setTimeout(() => {
+      this._spotifyFetch(`/me/player/volume?volume_percent=${pct}`, { method: 'PUT' });
+    }, 150);
+  }
+
+  _spotifySeekClick(event, el) {
+    const rect = el.getBoundingClientRect();
+    const pct  = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const ms   = Math.round(pct * (this._mediaProgress?.dur ?? 0) * 1000);
+    this._spotifySeek(ms);
+  }
+
+  async _spotifySeek(ms) {
+    if (this._mediaProgress) {
+      this._mediaProgress.pos     = ms / 1000;
+      this._mediaProgress.updated = Date.now();
+      this._renderMediaProgress();
+    }
+    await this._spotifyFetch(`/me/player/seek?position_ms=${ms}`, { method: 'PUT' });
+  }
+
+  async _spotifySearch(query) {
+    const res = this._q('#ma-search-results');
+    const q   = String(query ?? '').trim();
+    if (!res || q.length < 2) return;
+    res.innerHTML = '<div class="empty-state">Söker…</div>';
+
+    const data = await this._spotifyFetch(`/search?q=${encodeURIComponent(q)}&type=track,album,artist,playlist&limit=5&market=SE`);
+    if (!data) { res.innerHTML = '<div class="empty-state">Sökning misslyckades.</div>'; return; }
+
+    const items = [];
+    let html = '';
+
+    const tracks = data.tracks?.items || [];
+    if (tracks.length) {
+      html += '<div class="ma-sr-section">Låtar</div>';
+      html += tracks.slice(0, 5).map(t => {
+        const idx = items.push({ uri: t.uri, type: 'track', title: t.name }) - 1;
+        const img = t.album?.images?.[1]?.url || t.album?.images?.[0]?.url || '';
+        const art = (t.artists || []).map(a => a.name).join(', ');
+        return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
+          <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
+          <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(t.name)}</div><div class="ma-sr-sub">${this._escapeHtml(art)}</div></div>
+          <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
+        </div>`;
+      }).join('');
+    }
+
+    const playlists = data.playlists?.items || [];
+    if (playlists.length) {
+      html += '<div class="ma-sr-section">Spellistor</div>';
+      html += playlists.slice(0, 4).map(pl => {
+        const idx = items.push({ uri: pl.uri, type: 'playlist', title: pl.name }) - 1;
+        const img = pl.images?.[0]?.url || '';
+        const own = pl.owner?.display_name || '';
+        return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
+          <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
+          <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(pl.name)}</div><div class="ma-sr-sub">${this._escapeHtml(own)}</div></div>
+          <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
+        </div>`;
+      }).join('');
+    }
+
+    const artists = data.artists?.items || [];
+    if (artists.length) {
+      html += '<div class="ma-sr-section">Artister</div>';
+      html += artists.slice(0, 3).map(ar => {
+        const idx = items.push({ uri: ar.uri, type: 'artist', title: ar.name }) - 1;
+        const img = ar.images?.[2]?.url || ar.images?.[0]?.url || '';
+        return `<div class="ma-sr-item" onclick="this.getRootNode().host._spotifyPlaySearchResult(${idx})">
+          <div class="ma-sr-art">${img ? `<img src="${this._escapeAttr(img)}" alt="">` : '♫'}</div>
+          <div class="ma-sr-meta"><div class="ma-sr-title">${this._escapeHtml(ar.name)}</div><div class="ma-sr-sub">Artist</div></div>
+          <div class="ma-sr-play"><svg viewBox="0 0 24 24"><polygon points="7,5 19,12 7,19"/></svg></div>
+        </div>`;
+      }).join('');
+    }
+
+    this._spotifySearchItems = items;
+    res.innerHTML = html || '<div class="empty-state">Inga träffar.</div>';
+  }
+
+  async _spotifyPlaySearchResult(index) {
+    const item = this._spotifySearchItems?.[index];
+    if (!item) return;
+    const body = item.type === 'track'
+      ? { uris: [item.uri] }
+      : { context_uri: item.uri };
+    await this._spotifyFetch('/me/player/play', { method: 'PUT', body: JSON.stringify(body) });
+    const inp = this._q('#ma-search-input');
+    if (inp) inp.value = '';
+    const res = this._q('#ma-search-results');
+    if (res) res.innerHTML = '';
+    setTimeout(() => this._spotifyPollPlayback(), 600);
+  }
+
+  async _spotifyLoadPlaylists(force = false) {
+    const list = this._q('#ma-playlist-list');
+    if (!list) return;
+    const now = Date.now();
+    if (!force && this._lastMAPlaylistLoad && now - this._lastMAPlaylistLoad < 60000) return;
+    this._lastMAPlaylistLoad = now;
+
+    const data  = await this._spotifyFetch('/me/playlists?limit=20');
+    const items = (data?.items || []).filter(Boolean);
+    if (!items.length) { list.innerHTML = '<div class="empty-state">Inga spellistor hittades.</div>'; return; }
+
+    this._spotifyPlaylistItems = items;
+    list.innerHTML = `<div class="pl-grid">${items.slice(0, 9).map((pl, i) => {
+      const img = pl.images?.[0]?.url || '';
+      return `<div class="pl-card" onclick="this.getRootNode().host._spotifyPlayPlaylist(${i})">
+        ${img ? `<img class="pl-card-img" src="${this._escapeAttr(img)}" alt="">` : '<div class="pl-card-no-img">♫</div>'}
+        <div class="pl-card-bg"></div>
+        <div class="pl-card-lbl">${this._escapeHtml(pl.name || 'Spellista')}</div>
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  async _spotifyPlayPlaylist(index) {
+    const pl = this._spotifyPlaylistItems?.[index];
+    if (!pl) return;
+    await this._spotifyFetch('/me/player/play', { method: 'PUT', body: JSON.stringify({ context_uri: pl.uri }) });
+    setTimeout(() => this._spotifyPollPlayback(), 600);
+  }
+
+  async _spotifyLoadDevices() {
+    const list = this._q('#sp-speakers-list');
+    if (!list) return;
+    const data    = await this._spotifyFetch('/me/player/devices');
+    const devices = data?.devices || [];
+    if (!devices.length) {
+      list.innerHTML = '<div style="padding:12px 16px;color:var(--muted);font-size:13px">Inga enheter hittades</div>';
+      return;
+    }
+    const activeId = this._spotifyState?.device?.id;
+    list.innerHTML = devices.map(d => `
+      <div class="sp-speaker-item" onclick="this.getRootNode().host._spotifySelectDevice('${this._escapeAttr(d.id)}')">
+        <span class="sp-speaker-item-name">${this._escapeHtml(d.name)}</span>
+        <div class="sp-speaker-item-check${d.id === activeId ? ' on' : ''}"></div>
+      </div>`).join('') +
+      `<div class="sp-speaker-item" style="border-top:1px solid var(--border);margin-top:4px" onclick="this.getRootNode().host._spotifyLogout()">
+        <span class="sp-speaker-item-name" style="color:var(--muted);font-size:12px">Logga ut från Spotify</span>
+      </div>`;
+  }
+
+  async _spotifySelectDevice(deviceId) {
+    await this._spotifyFetch('/me/player', { method: 'PUT', body: JSON.stringify({ device_ids: [deviceId], play: true }) });
+    const panel = this._q('#sp-speakers-panel');
+    if (panel) panel.style.display = 'none';
+    setTimeout(() => this._spotifyPollPlayback(), 900);
+  }
+
+  _spotifyUpdateAuthUI(authenticated) {
+    const banner   = this._q('#sp-auth-banner');
+    const player   = this._q('#ma-playing');
+    const search   = this._q('#sp-search-panel');
+    const queue    = this._q('#sp-queue-section');
+    const playlists = this._q('#ma-playlists-card');
+    if (banner)    banner.style.display    = authenticated ? 'none' : 'flex';
+    if (player)    player.style.display    = authenticated ? 'flex'  : 'none';
+    if (search)    search.style.display    = authenticated ? ''      : 'none';
+    if (queue)     queue.style.display     = authenticated ? ''      : 'none';
+    if (playlists) playlists.style.display = authenticated ? ''      : 'none';
+  }
+
+  _spotifyLogout() {
+    clearInterval(this._spotifyPollTimer);
+    localStorage.removeItem('spotify_tokens');
+    this._spotifyToken       = null;
+    this._spotifyRefreshTok  = null;
+    this._spotifyTokenExpiry = null;
+    this._spotifyState       = null;
+    const panel = this._q('#sp-speakers-panel');
+    if (panel) panel.style.display = 'none';
+    this._spotifyUpdateAuthUI(false);
+  }
+
+  // ═══════════════════════════════════════════════════════════
 
   _setFloorHeat(i, value, slider) {
     if (slider) this._bindClimateSlider(slider);
