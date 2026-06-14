@@ -26,13 +26,13 @@
     </linearGradient>
 
     <!-- Soft amber glow on the bolt -->
-    <filter id="glow" x="-35%" y="-25%" width="170%" height="150%">
-      <feGaussianBlur in="SourceAlpha" stdDeviation="18" result="blur"/>
+    <filter id="glow" x="-50%" y="-40%" width="200%" height="180%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="28" result="blur"/>
       <feColorMatrix in="blur" type="matrix"
         values="0 0 0 0 0.88
                 0 0 0 0 0.60
                 0 0 0 0 0.04
-                0 0 0 0.70 0" result="colored"/>
+                0 0 0 0.80 0" result="colored"/>
       <feMerge>
         <feMergeNode in="colored"/>
         <feMergeNode in="SourceGraphic"/>
@@ -50,15 +50,11 @@
     stroke-dasharray="990 110" stroke-dashoffset="275"
     opacity="0.55"/>
 
-  <!-- Tick marks on the ring (solar panel / meter feel) -->
-  <circle cx="256" cy="248" r="175"
-    fill="none" stroke="url(#ring)" stroke-width="22"
-    stroke-linecap="round"
-    stroke-dasharray="1 52" stroke-dashoffset="292"
-    opacity="0.30"/>
-
-  <!-- Amber halo -->
-  <ellipse cx="245" cy="258" rx="155" ry="168" fill="url(#halo)"/>
+  <!-- Amber halo shaped to the bolt — wide at top, narrow at bottom -->
+  <path d="M292 78 L148 274 H238 L208 432 L364 232 H278 Z"
+    fill="#D4940A" opacity="0.18" filter="url(#glow)"/>
+  <path d="M292 78 L148 274 H238 L208 432 L364 232 H278 Z"
+    fill="#FF8800" opacity="0.10" filter="url(#glow)"/>
 
   <!-- Lightning bolt — main focal element -->
   <path d="M292 78
