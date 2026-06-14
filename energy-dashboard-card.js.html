@@ -7381,77 +7381,103 @@ class EnergyDashboardCard extends HTMLElement {
 
     this._restoreCardOrder(container);
 
-    let dragCard = null, ghost = null, placeholder = null;
+    let dragCard = null, ghost = null;
     let offsetX = 0, offsetY = 0;
     let longPressTimer = null;
     let downX = 0, downY = 0;
     let didDrag = false;
-    let snapRects = null; // frozen card positions taken at drag-start
-    let lastIdx   = -1;   // last insertion index — skip redundant DOM moves
+    let lastTarget = null;
+    let docMoveH = null, docUpH = null;
 
-    const liveCards = () => [...container.querySelectorAll('.card')]
-      .filter(c => c !== dragCard && c !== placeholder);
-
-    const beginDrag = (e, card) => {
-      dragCard = card;
-      didDrag  = false;
-      const rect = card.getBoundingClientRect();
-      offsetX = e.clientX - rect.left;
-      offsetY = e.clientY - rect.top;
-
-      placeholder = document.createElement('div');
-      placeholder.className = card.className;
-      placeholder.style.cssText = 'opacity:0;pointer-events:none';
-      container.insertBefore(placeholder, card);
-      card.remove(); // detach so the grid has no phantom slot
-
-      // Freeze positions NOW — used for ALL hit-testing during the drag.
-      // Index 0 = the placeholder's own slot (the card's original position).
-      // This lets the user drag back to the start without falling through to "append".
-      snapRects = [
-        { r: placeholder.getBoundingClientRect() },          // original slot
-        ...liveCards().map(c => ({ r: c.getBoundingClientRect() })), // other cards
-      ];
-      lastIdx = -1;
-
-      ghost = card.cloneNode(true);
-      ghost.style.cssText = [
-        'position:fixed',
-        `width:${rect.width}px`,
-        `height:${rect.height}px`,
-        `left:${rect.left}px`,
-        `top:${rect.top}px`,
-        'margin:0', 'z-index:99999', 'pointer-events:none',
-        'opacity:0.93', 'transform:scale(1.06)',
-        'box-shadow:0 16px 48px rgba(0,0,0,0.65)',
-        'transition:box-shadow 0.2s,transform 0.2s',
-        `border-radius:${getComputedStyle(card).borderRadius}`,
-        'overflow:hidden',
-      ].join(';');
-      root.appendChild(ghost);
-      container.style.touchAction = 'none';
-      container.classList.add('drag-active');
-      container.setPointerCapture(e.pointerId);
-    };
+    const otherCards = () => [...container.querySelectorAll('.card')].filter(c => c !== dragCard);
 
     const endDrag = () => {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
       if (!dragCard) return;
-
-      if (placeholder?.parentNode) placeholder.replaceWith(dragCard);
-      dragCard.style.cssText = '';
+      dragCard.style.visibility = '';
       ghost?.remove();
       container.style.touchAction = '';
       container.classList.remove('drag-active');
-
+      if (docMoveH) {
+        document.removeEventListener('pointermove', docMoveH);
+        document.removeEventListener('pointerup',   docUpH);
+        document.removeEventListener('pointercancel', docUpH);
+        docMoveH = null; docUpH = null;
+      }
       if (didDrag) {
         this._saveCardOrder(container);
         container.addEventListener('click', ev => ev.stopPropagation(), { once: true, capture: true });
       }
+      dragCard = null; ghost = null; lastTarget = null; didDrag = false;
+    };
 
-      dragCard = null; ghost = null; placeholder = null;
-      snapRects = null; lastIdx = -1; didDrag = false;
+    const beginDrag = (e, card) => {
+      dragCard = card;
+      didDrag  = false;
+      lastTarget = null;
+      const rect = card.getBoundingClientRect();
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+
+      // Keep card in DOM (visibility:hidden) so its grid slot stays occupied —
+      // no phantom-slot issues and the slot acts as a natural drop-target.
+      card.style.visibility = 'hidden';
+
+      ghost = card.cloneNode(true);
+      ghost.style.cssText = [
+        'position:fixed',
+        `width:${rect.width}px`, `height:${rect.height}px`,
+        `left:${rect.left}px`,  `top:${rect.top}px`,
+        'margin:0', 'z-index:99999', 'pointer-events:none',
+        'opacity:0.93', 'transform:scale(1.06)',
+        'box-shadow:0 16px 48px rgba(0,0,0,0.65)',
+        `border-radius:${getComputedStyle(card).borderRadius}`,
+        'overflow:hidden', 'transition:none',
+      ].join(';');
+      root.appendChild(ghost);
+      container.style.touchAction = 'none';
+      container.classList.add('drag-active');
+
+      // Document-level listeners: events arrive regardless of what element is
+      // under the pointer, bypassing the setPointerCapture-from-setTimeout
+      // limitation where mobile browsers silently reject the call.
+      docMoveH = (ev) => {
+        ev.preventDefault();
+        didDrag = true;
+
+        ghost.style.left = (ev.clientX - offsetX) + 'px';
+        ghost.style.top  = (ev.clientY - offsetY) + 'px';
+
+        // Find the card (excluding dragCard) whose rect contains the pointer
+        let target = null;
+        for (const c of otherCards()) {
+          const r = c.getBoundingClientRect();
+          if (ev.clientX >= r.left && ev.clientX <= r.right &&
+              ev.clientY >= r.top  && ev.clientY <= r.bottom) {
+            target = c; break;
+          }
+        }
+
+        if (!target || target === lastTarget) return;
+
+        const r = target.getBoundingClientRect();
+        const ratio = (ev.clientY - r.top) / r.height;
+
+        // Dead zone in the middle 40% of each card prevents oscillation when
+        // layout reflow after a move shifts the card centre under the pointer.
+        if (ratio > 0.3 && ratio < 0.7) return;
+
+        if (ratio <= 0.3) {
+          container.insertBefore(dragCard, target);
+        } else {
+          target.after(dragCard);
+        }
+        lastTarget = target;
+      };
+
+      docUpH = () => endDrag();
+      document.addEventListener('pointermove', docMoveH, { passive: false });
+      document.addEventListener('pointerup',   docUpH);
+      document.addEventListener('pointercancel', docUpH);
     };
 
     container.addEventListener('pointerdown', (e) => {
@@ -7463,43 +7489,15 @@ class EnergyDashboardCard extends HTMLElement {
     });
 
     container.addEventListener('pointermove', (e) => {
-      if (longPressTimer) {
-        if (Math.abs(e.clientX - downX) > 8 || Math.abs(e.clientY - downY) > 8) {
-          clearTimeout(longPressTimer); longPressTimer = null;
-        }
-        return;
+      if (!longPressTimer) return;
+      if (Math.abs(e.clientX - downX) > 8 || Math.abs(e.clientY - downY) > 8) {
+        clearTimeout(longPressTimer); longPressTimer = null;
       }
-      if (!dragCard || !ghost || !snapRects) return;
-      e.preventDefault();
-      didDrag = true;
+    });
 
-      ghost.style.left = (e.clientX - offsetX) + 'px';
-      ghost.style.top  = (e.clientY - offsetY) + 'px';
-
-      // Use POINTER position (not ghost centre) so the target slot tracks
-      // exactly where the finger is, regardless of how the card was grabbed.
-      // Find the nearest slot centre in the frozen snapshot (immune to reflow).
-      let newIdx = 0, bestD = Infinity;
-      for (let i = 0; i < snapRects.length; i++) {
-        const { r } = snapRects[i];
-        const d = Math.hypot(e.clientX - (r.left + r.width / 2),
-                             e.clientY - (r.top  + r.height / 2));
-        if (d < bestD) { bestD = d; newIdx = i; }
-      }
-
-      if (newIdx === lastIdx) return;
-      lastIdx = newIdx;
-
-      // snapRects[0] = original slot → insert before liveCards()[0]
-      // snapRects[i] → insert before liveCards()[i] (which is liveCards[i-1+1])
-      // When newIdx === snapRects.length-1 for last card, liveCards()[newIdx] may be
-      // undefined → insertBefore(placeholder, null) === appendChild ✓
-      const cards = liveCards();
-      container.insertBefore(placeholder, cards[newIdx] ?? null);
-    }, { passive: false });
-
-    container.addEventListener('pointerup',     endDrag);
-    container.addEventListener('pointercancel', endDrag);
+    const cancelLong = () => { clearTimeout(longPressTimer); longPressTimer = null; };
+    container.addEventListener('pointerup',     cancelLong);
+    container.addEventListener('pointercancel', cancelLong);
   }
 
   _startCast() {
