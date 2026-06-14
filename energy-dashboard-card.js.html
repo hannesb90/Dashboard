@@ -264,8 +264,12 @@ const SHARED_CSS = `
   .hours { display: flex; justify-content: space-between; font-size: clamp(9.5px, 2.3vw, 11.6px); color: rgba(226,215,196,0.45); margin-top: 5px; }
 
   /* Cards */
-  .cards { display: grid; grid-template-columns: repeat(3,1fr); gap: clamp(5.2px, 1.6%, 10.5px); padding: 0 14px clamp(6.3px, 1.6%, 10.5px); }
+  .cards { display: grid; grid-template-columns: repeat(3,1fr); gap: clamp(5.2px, 1.6%, 10.5px); padding: 0 14px clamp(6.3px, 1.6%, 10.5px); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .cards { grid-auto-rows: auto; }
+  /* Drag-and-drop states */
+  .card { transition: opacity 0.15s; }
+  .cards.drag-active .card { transition: transform 0.15s ease, opacity 0.15s; }
+  .card.drag-over { transform: scale(0.96); }
   .card { background: var(--bg2); border-radius: clamp(12.6px, 3.7vw, 18.9px); aspect-ratio: 1/1; padding: clamp(6.3px, 2.1vw, 10.5px); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; border: none; --ring-pct: 100%; --ring-color: rgba(255,255,255,0.07); --ring-ccw: 0; }
   /* Clockwise ring (default) */
   .card::before { content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 2px; background: conic-gradient(var(--ring-color) var(--ring-pct), rgba(255,255,255,0.07) var(--ring-pct)); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; transition: background 0.6s ease; }
@@ -1262,6 +1266,7 @@ class EnergyDashboardCard extends HTMLElement {
     try {
       this._config = { ...EnergyDashboardCard.getStubConfig(), ...config };
       this._buildShell();
+      this._initCardDrag();
       this._updateValues();
     } catch(e) {
       this.attachShadow({mode:'open'});
@@ -1705,7 +1710,7 @@ class EnergyDashboardCard extends HTMLElement {
         </div>
 
         <!-- Rad 2: Tesla · Värmepump · Laddbox -->
-        <div class="card openable" onclick="this.getRootNode().host._openPopup('tesla')">
+        <div class="card openable" id="card-tesla" onclick="this.getRootNode().host._openPopup('tesla')">
           <div class="card-icon">${svg(ICONS.car,'ic-ev')}</div>
           <div class="card-mid">
             <div class="ev-pct"><span id="h-ev">--</span><span class="unit">%</span></div>
@@ -7065,6 +7070,139 @@ class EnergyDashboardCard extends HTMLElement {
         cursor += w;
       });
     }
+  }
+
+  // ── Card drag-and-drop ────────────────────────────────────────
+  _saveCardOrder(container) {
+    const order = [...container.querySelectorAll('.card')]
+      .map(c => c.id || c.dataset.cardId)
+      .filter(Boolean);
+    localStorage.setItem('ha_card_order', JSON.stringify(order));
+  }
+
+  _restoreCardOrder(container) {
+    const saved = JSON.parse(localStorage.getItem('ha_card_order') || 'null');
+    if (!saved?.length) return;
+    saved.forEach(id => {
+      const card = container.querySelector(`#${CSS.escape(id)}`);
+      if (card) container.appendChild(card);
+    });
+  }
+
+  _initCardDrag() {
+    const root = this.shadowRoot;
+    const container = root.querySelector('.cards');
+    if (!container) return;
+
+    this._restoreCardOrder(container);
+
+    let dragCard = null, ghost = null, placeholder = null;
+    let offsetX = 0, offsetY = 0;
+    let longPressTimer = null;
+    let downX = 0, downY = 0;
+    let didDrag = false;
+
+    const liveCards = () => [...container.querySelectorAll('.card')]
+      .filter(c => c !== dragCard && c !== placeholder);
+
+    const findTarget = (x, y) => liveCards().find(c => {
+      const r = c.getBoundingClientRect();
+      return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    });
+
+    const beginDrag = (e, card) => {
+      dragCard = card;
+      didDrag = false;
+      const rect = card.getBoundingClientRect();
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+
+      // Invisible placeholder keeps the grid slot occupied
+      placeholder = document.createElement('div');
+      placeholder.className = card.className;
+      placeholder.style.cssText = 'opacity:0;pointer-events:none';
+      container.insertBefore(placeholder, card);
+
+      // Floating ghost follows the finger
+      ghost = card.cloneNode(true);
+      ghost.style.cssText = [
+        `position:fixed`,
+        `width:${rect.width}px`,
+        `height:${rect.height}px`,
+        `left:${rect.left}px`,
+        `top:${rect.top}px`,
+        `margin:0`,
+        `z-index:99999`,
+        `pointer-events:none`,
+        `opacity:0.93`,
+        `transform:scale(1.06)`,
+        `box-shadow:0 16px 48px rgba(0,0,0,0.65)`,
+        `transition:box-shadow 0.2s,transform 0.2s`,
+        `border-radius:${getComputedStyle(card).borderRadius}`,
+        `overflow:hidden`,
+      ].join(';');
+      root.appendChild(ghost);
+
+      card.style.cssText = 'opacity:0;pointer-events:none';
+      container.style.touchAction = 'none';
+      container.classList.add('drag-active');
+      container.setPointerCapture(e.pointerId);
+    };
+
+    const endDrag = () => {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+      if (!dragCard) return;
+
+      if (placeholder?.parentNode) {
+        placeholder.replaceWith(dragCard);
+      }
+      dragCard.style.cssText = '';
+      ghost?.remove();
+      container.style.touchAction = '';
+      container.classList.remove('drag-active');
+
+      if (didDrag) {
+        this._saveCardOrder(container);
+        // Swallow the click that fires after pointerup so popups don't open
+        container.addEventListener('click', e => { e.stopPropagation(); }, { once: true, capture: true });
+      }
+
+      dragCard = null; ghost = null; placeholder = null; didDrag = false;
+    };
+
+    container.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      const card = e.target.closest('.card');
+      if (!card) return;
+      downX = e.clientX; downY = e.clientY;
+      longPressTimer = setTimeout(() => beginDrag(e, card), 420);
+    });
+
+    container.addEventListener('pointermove', (e) => {
+      if (longPressTimer) {
+        if (Math.abs(e.clientX - downX) > 8 || Math.abs(e.clientY - downY) > 8) {
+          clearTimeout(longPressTimer); longPressTimer = null;
+        }
+        return;
+      }
+      if (!dragCard || !ghost) return;
+      e.preventDefault();
+      didDrag = true;
+
+      ghost.style.left = (e.clientX - offsetX) + 'px';
+      ghost.style.top  = (e.clientY - offsetY) + 'px';
+
+      const target = findTarget(e.clientX, e.clientY);
+      if (target) {
+        const r = target.getBoundingClientRect();
+        const insertBefore = e.clientX < r.left + r.width / 2;
+        container.insertBefore(placeholder, insertBefore ? target : target.nextSibling);
+      }
+    }, { passive: false });
+
+    container.addEventListener('pointerup',     endDrag);
+    container.addEventListener('pointercancel', endDrag);
   }
 
   _startCast() {
