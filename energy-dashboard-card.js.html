@@ -264,7 +264,7 @@ const SHARED_CSS = `
   .hours { display: flex; justify-content: space-between; font-size: clamp(9.5px, 2.3vw, 11.6px); color: rgba(226,215,196,0.45); margin-top: 5px; }
 
   /* Cards */
-  .cards { display: grid; grid-template-columns: repeat(3,1fr); gap: clamp(5.2px, 1.6%, 10.5px); padding: 0 14px clamp(6.3px, 1.6%, 10.5px); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .cards { display: grid; grid-template-columns: repeat(3,1fr); gap: clamp(5.2px, 1.6%, 10.5px); padding: 0 14px clamp(6.3px, 1.6%, 10.5px); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
   .cards { grid-auto-rows: auto; }
   /* Drag-and-drop states */
   .card { transition: opacity 0.15s; }
@@ -7387,7 +7387,6 @@ class EnergyDashboardCard extends HTMLElement {
     let downX = 0, downY = 0;
     let didDrag = false;
     let lastTarget = null;
-    let lastMoveTime = 0;
     let docMoveH = null, docUpH = null;
 
     const otherCards = () => [...container.querySelectorAll('.card')].filter(c => c !== dragCard);
@@ -7460,12 +7459,6 @@ class EnergyDashboardCard extends HTMLElement {
 
         if (!target || target === lastTarget) return;
 
-        // Throttle: allow at most one swap per 200 ms to prevent oscillation
-        // when layout reflow moves a card back under the pointer.
-        const now = Date.now();
-        if (now - lastMoveTime < 200) return;
-        lastMoveTime = now;
-
         // DOM-order comparison: drag forward → insert after target,
         // drag backward → insert before target. Works for both horizontal
         // and vertical movement without any Y-axis dead zone.
@@ -7494,7 +7487,7 @@ class EnergyDashboardCard extends HTMLElement {
 
     container.addEventListener('pointermove', (e) => {
       if (!longPressTimer) return;
-      if (Math.abs(e.clientX - downX) > 8 || Math.abs(e.clientY - downY) > 8) {
+      if (Math.abs(e.clientX - downX) > 15 || Math.abs(e.clientY - downY) > 15) {
         clearTimeout(longPressTimer); longPressTimer = null;
       }
     });
