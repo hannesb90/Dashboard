@@ -92,14 +92,31 @@
       opacity: 1; transition: opacity 1s ease;
     }
   </style>
-  <!-- Cast SDK must be synchronous — async/defer breaks Chrome's Cast hook -->
-  <script>window['__onGCastApiAvailable'] = function(ok) { window.__castApiReady = ok; if (window.castSender) window.castSender._apiReady(ok); };</script>
+  <!-- Cast SDK must load synchronously so Chrome's Cast hook fires -->
+  <script>
+    window['__onGCastApiAvailable'] = function(ok) {
+      window.__castApiReady = ok;
+      if (window.castSender) window.castSender._apiReady(ok);
+    };
+    // Fallback: if SDK loaded but callback never fired (e.g. Chrome timing quirk),
+    // detect and trigger manually after 3 s
+    window.__castFallbackTimer = setTimeout(function() {
+      if (window.__castApiReady !== undefined) return;
+      var castOk = typeof cast !== 'undefined' && !!cast.framework;
+      var chromeOk = typeof chrome !== 'undefined' && !!chrome.cast;
+      if (castOk && chromeOk) {
+        window.__onGCastApiAvailable(true);
+      } else {
+        window.__castApiReady = 'unavailable';
+      }
+    }, 3000);
+  </script>
   <script src="https://www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js"></script>
 </head>
 <body>
   <div id="loader"><div class="spinner"></div></div>
   <div id="conn-status">Offline</div>
-  <div id="ver-badge">v56</div>
+  <div id="ver-badge">v57</div>
 
   <div id="auth-screen">
     <div class="auth-icon">&#9889;</div>

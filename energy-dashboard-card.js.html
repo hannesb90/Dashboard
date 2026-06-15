@@ -5740,13 +5740,19 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   _castRequest() {
-    // Must wait for full SDK initialisation — cast.framework classes exist before
-    // chrome.cast (SessionRequest etc.) is ready, so guard on __castApiReady.
     if (window.__castApiReady !== true) {
-      if (window.__castSdkError)          { this._showToast('Cast-SDK laddades inte: ' + window.__castSdkError); return; }
-      if (window.__castApiReady === false) { this._showToast('Cast ej tillgängligt – krävs Chrome på dator.'); return; }
-      this._showToast('Cast-SDK laddas – vänta några sekunder och försök igen.');
-      return;
+      // Detailed diagnostics so we can see exactly what's missing
+      const castDef   = typeof cast !== 'undefined';
+      const chromeDef = typeof chrome !== 'undefined' && !!chrome?.cast;
+      const standalone = window.matchMedia?.('(display-mode: standalone)').matches;
+      if (standalone)           { this._showToast('Cast kräver Chrome-webbläsaren – stäng PWA och öppna i Chrome.'); return; }
+      if (window.__castSdkError) { this._showToast('Cast-SDK blockerad: ' + window.__castSdkError); return; }
+      if (window.__castApiReady === false || window.__castApiReady === 'unavailable') {
+        this._showToast('Cast ej tillgängligt – krävs Chrome på dator (inte PWA).'); return;
+      }
+      if (!castDef)   { this._showToast('cast_framework.js laddades inte – blockerad av nätverket?'); return; }
+      if (!chromeDef) { this._showToast('chrome.cast saknas – SDK delvis laddad, prova igen om 3 s.'); return; }
+      this._showToast('Cast initieras (3 s) – prova igen strax.'); return;
     }
     try {
       const ctx = cast.framework.CastContext.getInstance();
@@ -5755,9 +5761,9 @@ class EnergyDashboardCard extends HTMLElement {
         const code   = (e && typeof e === 'object') ? (e.code ?? e.description ?? JSON.stringify(e)) : String(e ?? '');
         if (!code || code === cancel) return;
         const msg = code === 'receiver_unavailable'
-          ? 'Ingen Cast-enhet hittades. Är Nest Hub på samma nätverk?'
+          ? 'Ingen Cast-enhet hittades – är Nest Hub på samma nätverk?'
           : code === 'session_error'
-          ? 'Nest Hub nekade anslutningen – registrera enheten som testapparat.'
+          ? 'Nest Hub nekade – kontrollera att enheten är registrerad som testapparat.'
           : 'Cast-fel: ' + code;
         this._showToast(msg);
       });
