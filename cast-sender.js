@@ -21,7 +21,7 @@ class CastSender {
     const ctx = cast.framework.CastContext.getInstance();
     ctx.setOptions({
       receiverApplicationId: CAST_APP_ID,
-      autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+      autoJoinPolicy: chrome?.cast?.AutoJoinPolicy?.ORIGIN_SCOPED ?? 'origin_scoped',
     });
     ctx.addEventListener(
       cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
