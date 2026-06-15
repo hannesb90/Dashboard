@@ -96,7 +96,7 @@
 <body>
   <div id="loader"><div class="spinner"></div></div>
   <div id="conn-status">Offline</div>
-  <div id="ver-badge">v48</div>
+  <div id="ver-badge">v49</div>
 
   <div id="auth-screen">
     <div class="auth-icon">&#9889;</div>
@@ -253,10 +253,10 @@
           window.__castApiReady = ok;
           window.castSender?._apiReady(ok);
         };
-        loadScript('//www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js')
-          .then(() => loadScript('cast-sender.js'))
+        loadScript('https://www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js')
+          .then(() => { window.__castSdkLoaded = true; return loadScript('cast-sender.js'); })
           .then(() => window.castSender?.init())
-          .catch(() => {});
+          .catch((e) => { window.__castSdkError = String(e && e.message || e || 'load failed'); });
       } catch {
         showAuth('Kunde inte ladda appen — kontrollera nätverksanslutningen.');
         return;

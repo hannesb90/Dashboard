@@ -5737,22 +5737,26 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   _castRequest() {
-    if (typeof cast === 'undefined' || !cast?.framework) {
-      this._showToast('Cast stöds bara i Chrome på dator eller Android.');
+    if (typeof cast !== 'undefined' && cast?.framework) {
+      try {
+        const ctx = cast.framework.CastContext.getInstance();
+        ctx.setOptions({
+          receiverApplicationId: 'BAEFEE39',
+          autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+        });
+        ctx.requestSession().catch(e => {
+          if (e && e !== chrome.cast?.ErrorCode?.CANCEL) this._showToast('Cast-fel: ' + e);
+        });
+      } catch(e) {
+        this._showToast('Cast-fel: ' + e.message);
+      }
       return;
     }
-    try {
-      const ctx = cast.framework.CastContext.getInstance();
-      ctx.setOptions({
-        receiverApplicationId: 'BAEFEE39',
-        autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
-      });
-      ctx.requestSession().catch(e => {
-        if (e && e !== chrome.cast?.ErrorCode?.CANCEL) this._showToast('Cast-fel: ' + e);
-      });
-    } catch(e) {
-      this._showToast('Cast-fel: ' + e.message);
-    }
+    // Cast object unavailable — report exactly why
+    if (window.__castSdkError)        { this._showToast('Cast-SDK kunde inte laddas: ' + window.__castSdkError); return; }
+    if (!window.__castSdkLoaded)      { this._showToast('Cast-SDK laddas fortfarande – vänta och försök igen.'); return; }
+    if (window.__castApiReady === false) { this._showToast('Chrome rapporterar att Cast ej är tillgängligt (API=false).'); return; }
+    this._showToast('Cast otillgängligt: SDK laddad men cast-objektet saknas.');
   }
 
   _showToast(msg) {
