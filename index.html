@@ -92,32 +92,35 @@
       opacity: 1; transition: opacity 1s ease;
     }
   </style>
-  <!-- Cast SDK must load synchronously so Chrome's Cast hook fires -->
+  <!-- Cast SDK: callback defined early, SDK loaded after page ready so Chrome's
+       Cast infrastructure has time to initialise before injecting chrome.cast -->
   <script>
     window['__onGCastApiAvailable'] = function(ok) {
       window.__castApiReady = ok;
+      clearTimeout(window.__castFallbackTimer);
       if (window.castSender) window.castSender._apiReady(ok);
     };
-    // Fallback: if callback never fires after 10 s, diagnose
-    window.__castFallbackTimer = setTimeout(function() {
-      if (window.__castApiReady !== undefined) return;
-      var castDef   = typeof cast !== 'undefined' && !!cast.framework;
-      var chromeDef = typeof chrome !== 'undefined' && !!chrome.cast;
-      if (castDef && chromeDef) {
-        window.__onGCastApiAvailable(true);          // both ready — trigger manually
-      } else if (!castDef) {
-        window.__castApiReady = 'sdk_missing';       // cast_framework.js never ran
-      } else {
-        window.__castApiReady = 'chrome_cast_missing'; // SDK ran but chrome.cast absent
-      }
-    }, 10000);
+    window.addEventListener('load', function() {
+      var s = document.createElement('script');
+      s.src = 'https://www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js';
+      s.onerror = function() { window.__castApiReady = 'sdk_missing'; };
+      document.head.appendChild(s);
+      // Fallback: if callback still hasn't fired after 10 s, diagnose
+      window.__castFallbackTimer = setTimeout(function() {
+        if (window.__castApiReady !== undefined) return;
+        var castDef   = typeof cast !== 'undefined' && !!cast.framework;
+        var chromeDef = typeof chrome !== 'undefined' && !!chrome.cast;
+        if (castDef && chromeDef)  window.__onGCastApiAvailable(true);
+        else if (!castDef)         window.__castApiReady = 'sdk_missing';
+        else                       window.__castApiReady = 'chrome_cast_missing';
+      }, 10000);
+    });
   </script>
-  <script src="https://www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js"></script>
 </head>
 <body>
   <div id="loader"><div class="spinner"></div></div>
   <div id="conn-status">Offline</div>
-  <div id="ver-badge">v59</div>
+  <div id="ver-badge">v60</div>
 
   <div id="auth-screen">
     <div class="auth-icon">&#9889;</div>
