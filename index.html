@@ -96,7 +96,7 @@
 <body>
   <div id="loader"><div class="spinner"></div></div>
   <div id="conn-status">Offline</div>
-  <div id="ver-badge">v42</div>
+  <div id="ver-badge">v43</div>
 
   <div id="auth-screen">
     <div class="auth-icon">&#9889;</div>
@@ -248,10 +248,14 @@
       try {
         await loadViaEval('energy-dashboard-card.js.html');
         await loadScript('ha-connection.js');
-        // Load Cast Sender SDK + integration (non-blocking — Cast may not be available)
+        // __onGCastApiAvailable MUST be defined before the SDK script loads
+        window['__onGCastApiAvailable'] = (ok) => {
+          window.__castApiReady = ok;
+          window.castSender?._apiReady(ok);
+        };
         loadScript('//www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js')
           .then(() => loadScript('cast-sender.js'))
-          .then(() => { if (window.castSender) window.castSender.init(); })
+          .then(() => window.castSender?.init())
           .catch(() => {});
       } catch {
         showAuth('Kunde inte ladda appen — kontrollera nätverksanslutningen.');
