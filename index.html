@@ -98,27 +98,26 @@
       window.__castApiReady = ok;
       if (window.castSender) window.castSender._apiReady(ok);
     };
-    // Fallback: if callback never fires, diagnose after 3 s
+    // Fallback: if callback never fires after 10 s, diagnose
     window.__castFallbackTimer = setTimeout(function() {
       if (window.__castApiReady !== undefined) return;
       var castDef   = typeof cast !== 'undefined' && !!cast.framework;
       var chromeDef = typeof chrome !== 'undefined' && !!chrome.cast;
       if (castDef && chromeDef) {
-        // SDK ready but callback missed — trigger manually
-        window.__onGCastApiAvailable(true);
+        window.__onGCastApiAvailable(true);          // both ready — trigger manually
       } else if (!castDef) {
-        window.__castApiReady = 'sdk_missing';    // cast_framework.js didn't run
+        window.__castApiReady = 'sdk_missing';       // cast_framework.js never ran
       } else {
-        window.__castApiReady = 'chrome_cast_missing'; // cast loaded, chrome.cast absent
+        window.__castApiReady = 'chrome_cast_missing'; // SDK ran but chrome.cast absent
       }
-    }, 3000);
+    }, 10000);
   </script>
   <script src="https://www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js"></script>
 </head>
 <body>
   <div id="loader"><div class="spinner"></div></div>
   <div id="conn-status">Offline</div>
-  <div id="ver-badge">v58</div>
+  <div id="ver-badge">v59</div>
 
   <div id="auth-screen">
     <div class="auth-icon">&#9889;</div>
