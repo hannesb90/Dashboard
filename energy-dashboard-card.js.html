@@ -5737,14 +5737,22 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   _castRequest() {
-    const hasCast  = typeof cast !== 'undefined';
-    const hasFw    = hasCast && !!cast?.framework;
-    const hasSdr   = !!window.castSender;
-    const isReady  = window.castSender?._ready;
-    if (!hasCast)  { this._showToast(`Cast SDK saknas (cast=undefined, sender=${hasSdr})`); return; }
-    if (!hasFw)    { this._showToast(`cast.framework saknas (sender=${hasSdr}, ready=${isReady})`); return; }
-    if (!hasSdr)   { this._showToast('castSender saknas'); return; }
-    window.castSender.requestSession();
+    if (typeof cast === 'undefined' || !cast?.framework) {
+      this._showToast('Cast stöds bara i Chrome på dator eller Android.');
+      return;
+    }
+    try {
+      const ctx = cast.framework.CastContext.getInstance();
+      ctx.setOptions({
+        receiverApplicationId: 'BAEFEE39',
+        autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+      });
+      ctx.requestSession().catch(e => {
+        if (e && e !== chrome.cast?.ErrorCode?.CANCEL) this._showToast('Cast-fel: ' + e);
+      });
+    } catch(e) {
+      this._showToast('Cast-fel: ' + e.message);
+    }
   }
 
   _showToast(msg) {
