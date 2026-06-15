@@ -6,7 +6,7 @@
 //   3. Replace CAST_APP_ID below with your Application ID
 //   4. Add your Nest Hub's serial number to the test devices during development
 
-const CAST_APP_ID = 'YOUR_CAST_APP_ID';
+const CAST_APP_ID = 'BAEFEE39';
 const CAST_NAMESPACE = 'urn:x-cast:energy-dashboard';
 
 class CastSender {
@@ -17,10 +17,7 @@ class CastSender {
     this._onStatusChange = null;
   }
 
-  init(config, onStatusChange) {
-    this._config = config;
-    this._onStatusChange = onStatusChange;
-
+  init() {
     window['__onGCastApiAvailable'] = (isAvailable) => {
       this._castAvailable = isAvailable;
       if (!isAvailable) return;

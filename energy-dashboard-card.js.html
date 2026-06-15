@@ -2544,7 +2544,19 @@ class EnergyDashboardCard extends HTMLElement {
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="8" height="13" rx="2"/><path d="M10 6h4"/><path d="M10 9h4"/><path d="M10 12h4"/><rect x="14" y="5" width="8" height="11" rx="2"/></svg>
             <span id="sp-speaker-name">Matrummet</span>
           </div>
-          <div style="font-size:11px;color:var(--muted);cursor:pointer" onclick="this.getRootNode().host._maToggleSpeakers()">Ändra ></div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-size:11px;color:var(--muted);cursor:pointer" onclick="this.getRootNode().host._maToggleSpeakers()">Ändra ></div>
+            <button id="cast-btn" title="Casta till Nest Hub"
+              onclick="window.castSender?.requestSession()"
+              style="background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);display:flex;align-items:center;-webkit-tap-highlight-color:transparent">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M2 16.1A5 5 0 0 1 5.9 20"/>
+                <path d="M2 12.05A9 9 0 0 1 9.95 20"/>
+                <path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/>
+                <line x1="2" y1="20" x2="2.01" y2="20"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <!-- Speaker panel -->
         <div id="sp-speakers-panel" style="display:none;background:var(--bg3);border-radius:12px;margin-top:6px;overflow:hidden">
