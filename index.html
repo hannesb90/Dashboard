@@ -92,14 +92,14 @@
       opacity: 1; transition: opacity 1s ease;
     }
   </style>
-  <!-- Cast callback must be defined before the SDK script executes -->
+  <!-- Cast SDK must be synchronous — async/defer breaks Chrome's Cast hook -->
   <script>window['__onGCastApiAvailable'] = function(ok) { window.__castApiReady = ok; if (window.castSender) window.castSender._apiReady(ok); };</script>
-  <script src="https://www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js" async></script>
+  <script src="https://www.gstatic.com/cast/sdk/libs/sender/1.0/cast_framework.js"></script>
 </head>
 <body>
   <div id="loader"><div class="spinner"></div></div>
   <div id="conn-status">Offline</div>
-  <div id="ver-badge">v55</div>
+  <div id="ver-badge">v56</div>
 
   <div id="auth-screen">
     <div class="auth-icon">&#9889;</div>
