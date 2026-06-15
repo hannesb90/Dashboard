@@ -5740,6 +5740,9 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   _castRequest() {
+    console.log('[Cast] _castRequest called, __castApiReady =', window.__castApiReady,
+      '| cast defined:', typeof cast !== 'undefined',
+      '| chrome.cast:', typeof chrome !== 'undefined' && !!chrome?.cast);
     if (window.__castApiReady !== true) {
       // Detailed diagnostics so we can see exactly what's missing
       const castDef   = typeof cast !== 'undefined';
