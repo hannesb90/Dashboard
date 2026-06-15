@@ -83,8 +83,9 @@ class CastSender {
       if (!btn) continue;
       btn.style.color = active ? '#4A9EFF' : '';
       btn.title = active ? 'Avsluta cast' : 'Casta till Nest Hub';
+      // Always restore to _castRequest so the button stays functional after session ends
       if (active) btn.onclick = () => this.endSession();
-      else btn.onclick = null;
+      else btn.onclick = () => card._castRequest();
     }
   }
 

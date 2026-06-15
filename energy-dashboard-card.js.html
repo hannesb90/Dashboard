@@ -5743,27 +5743,32 @@ class EnergyDashboardCard extends HTMLElement {
     if (typeof cast !== 'undefined' && cast?.framework) {
       try {
         const ctx = cast.framework.CastContext.getInstance();
-        // Ensure options set in case __onGCastApiAvailable hasn't fired yet
-        if (!window.__castApiReady) {
-          ctx.setOptions({
-            receiverApplicationId: 'BAEFEE39',
-            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
-          });
-        }
+        // Always ensure options are set — safe to call even if already set
+        ctx.setOptions({
+          receiverApplicationId: 'BAEFEE39',
+          autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+        });
         ctx.requestSession().catch(e => {
-          const code = (e && typeof e === 'object') ? (e.code || e.description || JSON.stringify(e)) : String(e);
-          if (code && code !== chrome.cast?.ErrorCode?.CANCEL) this._showToast('Cast-fel: ' + code);
+          const cancel = chrome.cast?.ErrorCode?.CANCEL ?? 'cancel';
+          const code   = (e && typeof e === 'object') ? (e.code ?? e.description ?? JSON.stringify(e)) : String(e ?? '');
+          if (!code || code === cancel) return;
+          const msg = code === 'receiver_unavailable'
+            ? 'Ingen Cast-enhet hittades. Är Nest Hub på samma nätverk?'
+            : code === 'session_error'
+            ? 'Nest Hub nekade anslutningen – registrera enheten som testapparat.'
+            : 'Cast-fel: ' + code;
+          this._showToast(msg);
         });
       } catch(e) {
         this._showToast('Cast-fel: ' + (e.message || String(e)));
       }
       return;
     }
-    // Cast object unavailable — report exactly why
-    if (window.__castSdkError)        { this._showToast('Cast-SDK kunde inte laddas: ' + window.__castSdkError); return; }
-    if (!window.__castSdkLoaded)      { this._showToast('Cast-SDK laddas fortfarande – vänta och försök igen.'); return; }
-    if (window.__castApiReady === false) { this._showToast('Chrome rapporterar att Cast ej är tillgängligt (API=false).'); return; }
-    this._showToast('Cast otillgängligt: SDK laddad men cast-objektet saknas.');
+    // Cast SDK unavailable — surface the exact reason
+    if (window.__castSdkError)           { this._showToast('Cast-SDK laddades inte: ' + window.__castSdkError); return; }
+    if (!window.__castSdkLoaded)         { this._showToast('Cast-SDK laddas – vänta några sekunder och försök igen.'); return; }
+    if (window.__castApiReady === false)  { this._showToast('Cast ej tillgängligt – krävs Chrome på dator.'); return; }
+    this._showToast('Cast ej tillgängligt – krävs Chrome på dator.');
   }
 
   _showToast(msg) {
@@ -5777,7 +5782,7 @@ class EnergyDashboardCard extends HTMLElement {
     t.textContent = msg;
     t.style.opacity = '1';
     clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+    this._toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 4000);
   }
 
   _maToggleSpeakers() {
