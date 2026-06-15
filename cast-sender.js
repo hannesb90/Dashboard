@@ -80,7 +80,10 @@ class CastSender {
     if (!btn) return;
     btn.style.color = active ? '#4A9EFF' : '';
     btn.title       = active ? 'Avsluta cast' : 'Casta till Nest Hub';
-    btn.onclick      = active ? () => this.endSession() : () => this.requestSession();
+    // Keep using the shadow DOM host pattern — just update color/title; onclick stays as _castRequest()
+    // Override onclick only for endSession since that runs from outside
+    if (active) btn.onclick = () => this.endSession();
+    else btn.onclick = null; // fall back to inline onclick -> _castRequest()
   }
 
   get isCasting() { return !!this._session; }
