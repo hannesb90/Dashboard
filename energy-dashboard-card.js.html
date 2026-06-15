@@ -5745,14 +5745,14 @@ class EnergyDashboardCard extends HTMLElement {
       const castDef   = typeof cast !== 'undefined';
       const chromeDef = typeof chrome !== 'undefined' && !!chrome?.cast;
       const standalone = window.matchMedia?.('(display-mode: standalone)').matches;
-      if (standalone)           { this._showToast('Cast kräver Chrome-webbläsaren – stäng PWA och öppna i Chrome.'); return; }
-      if (window.__castSdkError) { this._showToast('Cast-SDK blockerad: ' + window.__castSdkError); return; }
-      if (window.__castApiReady === false || window.__castApiReady === 'unavailable') {
-        this._showToast('Cast ej tillgängligt – krävs Chrome på dator (inte PWA).'); return;
-      }
-      if (!castDef)   { this._showToast('cast_framework.js laddades inte – blockerad av nätverket?'); return; }
-      if (!chromeDef) { this._showToast('chrome.cast saknas – SDK delvis laddad, prova igen om 3 s.'); return; }
-      this._showToast('Cast initieras (3 s) – prova igen strax.'); return;
+      if (standalone)                                     { this._showToast('Cast fungerar ej i PWA – öppna dashboarden i en Chrome-flik.'); return; }
+      if (window.__castSdkError)                          { this._showToast('cast-sender.js laddades ej: ' + window.__castSdkError); return; }
+      if (window.__castApiReady === 'sdk_missing')        { this._showToast('cast_framework.js blockerades – kontrollera adblocker (gstatic.com).'); return; }
+      if (window.__castApiReady === 'chrome_cast_missing'){ this._showToast('chrome.cast saknas – Cast ej stödd i den här Chrome-versionen.'); return; }
+      if (window.__castApiReady === false)                { this._showToast('Chrome: Cast ej tillgängligt – prova att stänga av adblocker/VPN.'); return; }
+      if (!castDef)   { this._showToast('cast_framework.js ej klar ännu – prova igen om 3 s.'); return; }
+      if (!chromeDef) { this._showToast('chrome.cast ej klar ännu – prova igen om 3 s.'); return; }
+      this._showToast('Cast initieras – prova igen om 3 s.'); return;
     }
     try {
       const ctx = cast.framework.CastContext.getInstance();
