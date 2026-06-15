@@ -213,18 +213,19 @@ function updateSidebar(hass) {
   document.getElementById('sb-ev').textContent = isNaN(ev) ? '--' : Math.round(ev);
 }
 
-// ── Cast Receiver ─────────────────────────────────────────────
-const context = cast.framework.CastReceiverContext.getInstance();
+// ── Dashboard loader (shared between auto-start and Cast INIT) ───
+let _loaded = false;
+async function startDashboard(hassUrl, token, entityConfig) {
+  if (_loaded) return;
+  _loaded = true;
 
-context.addCustomMessageListener(CAST_NAMESPACE, async (event) => {
-  const msg = event.data;
-  if (msg.type !== 'INIT') return;
+  _cfg = entityConfig ?? {};
 
-  _cfg = msg.entityConfig ?? {};
+  // Persist credentials so next boot auto-connects without a sender
+  try { localStorage.setItem('receiver_creds', JSON.stringify({ hassUrl, token, entityConfig: _cfg })); } catch {}
 
   document.getElementById('waiting-title').textContent = 'Laddar dashboard…';
-  document.getElementById('waiting-sub').innerHTML =
-    '<div class="spinner"></div>';
+  document.getElementById('waiting-sub').innerHTML = '<div class="spinner"></div>';
 
   try {
     await loadViaEval('./energy-dashboard-card.js.html');
@@ -232,7 +233,6 @@ context.addCustomMessageListener(CAST_NAMESPACE, async (event) => {
   } catch (e) {
     document.getElementById('waiting-title').textContent = 'Laddning misslyckades';
     document.getElementById('waiting-sub').textContent = e.message;
-    console.error('[Receiver]', e);
     return;
   }
 
@@ -261,14 +261,39 @@ context.addCustomMessageListener(CAST_NAMESPACE, async (event) => {
   };
   haConn.setCard(card);
 
-  // Reveal UI
-  document.getElementById('waiting').style.display     = 'none';
-  document.getElementById('card-wrap').style.display   = 'block';
-  document.getElementById('sidebar-left').style.display  = 'flex';
-  document.getElementById('sidebar-right').style.display = 'flex';
+  document.getElementById('waiting').style.display        = 'none';
+  document.getElementById('card-wrap').style.display      = 'block';
+  document.getElementById('sidebar-left').style.display   = 'flex';
+  document.getElementById('sidebar-right').style.display  = 'flex';
 
-  haConn.connect(msg.hassUrl, msg.token);
+  haConn.connect(hassUrl, token);
+}
+
+// ── Auto-start from saved credentials (no sender needed) ──────
+try {
+  const saved = JSON.parse(localStorage.getItem('receiver_creds') || 'null');
+  if (saved?.hassUrl && saved?.token) {
+    document.getElementById('waiting-sub').textContent = 'Ansluter automatiskt…';
+    startDashboard(saved.hassUrl, saved.token, saved.entityConfig);
+  }
+} catch {}
+
+// ── Cast Receiver (first-time setup or credential update) ─────
+const context = cast.framework.CastReceiverContext.getInstance();
+
+context.addCustomMessageListener(CAST_NAMESPACE, (event) => {
+  const msg = event.data;
+  if (msg.type !== 'INIT') return;
+  // Always update stored credentials when a sender connects
+  try { localStorage.setItem('receiver_creds', JSON.stringify({ hassUrl: msg.hassUrl, token: msg.token, entityConfig: msg.entityConfig ?? {} })); } catch {}
+  startDashboard(msg.hassUrl, msg.token, msg.entityConfig);
 });
+
+// Keep receiver alive when sender disconnects — dashboard stays on screen
+context.addEventListener(
+  cast.framework.system.EventType.SENDER_DISCONNECTED,
+  () => { /* intentionally empty — let HA connection keep running */ }
+);
 
 context.start({ disableIdleTimeout: true });
 </script>
