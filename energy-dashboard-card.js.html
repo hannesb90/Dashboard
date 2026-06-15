@@ -5737,11 +5737,12 @@ class EnergyDashboardCard extends HTMLElement {
   }
 
   _castRequest() {
-    if (!window.castSender?._ready) {
-      this._showToast('Cast fungerar bara i Chrome på dator eller Android.');
+    // cast.framework is the reliable indicator that the Cast SDK loaded and is active
+    if (typeof cast === 'undefined' || !cast.framework) {
+      this._showToast('Cast kräver Chrome på dator eller Android.');
       return;
     }
-    window.castSender.requestSession();
+    window.castSender?.requestSession();
   }
 
   _showToast(msg) {
