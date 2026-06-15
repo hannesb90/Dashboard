@@ -1735,7 +1735,7 @@ class EnergyDashboardCard extends HTMLElement {
                 <circle cx="18" cy="18" r="15" fill="none" stroke="#C07840" stroke-width="2.5" stroke-dasharray="94 94" stroke-linecap="round" transform="rotate(-90 18 18)"/>
               </svg>
             </div>
-            <div class="icon-btn" id="cast-btn" style="cursor:pointer" onclick="this.getRootNode().host._startCast()" title="Casta till Nest Hub">
+            <div class="icon-btn" id="cast-btn-home" style="cursor:pointer" onclick="this.getRootNode().host._castRequest()" title="Casta till Nest Hub">
               ${svg(ICONS.cast,'ic-muted')}
             </div>
           </div>
@@ -5743,15 +5743,19 @@ class EnergyDashboardCard extends HTMLElement {
     if (typeof cast !== 'undefined' && cast?.framework) {
       try {
         const ctx = cast.framework.CastContext.getInstance();
-        ctx.setOptions({
-          receiverApplicationId: 'BAEFEE39',
-          autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
-        });
+        // Ensure options set in case __onGCastApiAvailable hasn't fired yet
+        if (!window.__castApiReady) {
+          ctx.setOptions({
+            receiverApplicationId: 'BAEFEE39',
+            autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
+          });
+        }
         ctx.requestSession().catch(e => {
-          if (e && e !== chrome.cast?.ErrorCode?.CANCEL) this._showToast('Cast-fel: ' + e);
+          const code = (e && typeof e === 'object') ? (e.code || e.description || JSON.stringify(e)) : String(e);
+          if (code && code !== chrome.cast?.ErrorCode?.CANCEL) this._showToast('Cast-fel: ' + code);
         });
       } catch(e) {
-        this._showToast('Cast-fel: ' + e.message);
+        this._showToast('Cast-fel: ' + (e.message || String(e)));
       }
       return;
     }
@@ -7949,11 +7953,7 @@ class EnergyDashboardCard extends HTMLElement {
     setTimeout(() => panel.querySelector('#acp-lbl')?.focus(), 400);
   }
 
-  _startCast() {
-    if (window.castSender) {
-      window.castSender.requestSession();
-    }
-  }
+  _startCast() { this._castRequest(); }
 
   disconnectedCallback() {
     if (this._timer) clearInterval(this._timer);
